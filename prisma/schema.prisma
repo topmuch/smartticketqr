@@ -94,6 +94,8 @@ model Organization {
   orgSecret     OrgSecret?
   scanLogs      ScanLog[]
   offlineQueue  OfflineScanQueue[]
+  statsCache    OrgStatsCache?
+  auditLogs     AuditLog[]
 
   @@index([slug])
   @@index([subscriptionStatus])
@@ -121,6 +123,7 @@ model User {
   scans         Scan[]
   activityLogs  ActivityLog[]
   transactions  Transaction[]
+  auditLogs    AuditLog[]
 
   @@unique([email, organizationId])
   @@index([role])
@@ -353,4 +356,53 @@ model ActivityLog {
   @@index([organizationId])
   @@index([organizationId, action])
   @@index([organizationId, createdAt])
+}
+
+// ============================================================
+// 📊 ORG STATS CACHE (materialized view for performance)
+// ============================================================
+model OrgStatsCache {
+  id                  String   @id @default(cuid())
+  organizationId      String   @unique
+  totalRevenueMonth   Float    @default(0)
+  totalTicketsSoldMonth Int    @default(0)
+  totalScansToday     Int      @default(0)
+  totalScansWeek      Int      @default(0)
+  totalTicketsAll     Int      @default(0)
+  totalActiveEvents   Int      @default(0)
+  validationRate      Float    @default(0)
+  lastUpdated         DateTime @default(now())
+
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([lastUpdated])
+}
+
+// ============================================================
+// 🔐 AUDIT LOGS (security trail for sensitive actions)
+// ============================================================
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  action         String                                   // LOGIN_FAIL, PRICE_CHANGE, TICKET_DELETE, EVENT_UPDATE, USER_DEACTIVATE, PERMISSION_CHANGE
+  targetType     String?                                  // event, ticket, user, subscription
+  targetId       String?
+  details        String?                                  // JSON string with old/new values
+  ipAddress      String?
+  userAgent      String?
+  severity       String   @default("info")                // info, warning, critical
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, action])
+  @@index([organizationId, createdAt])
+  @@index([userId])
+  @@index([action])
+  @@index([severity])
+  @@index([createdAt])
 }

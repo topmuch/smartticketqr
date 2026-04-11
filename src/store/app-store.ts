@@ -13,7 +13,9 @@ export type PageName =
   | 'settings'
   | 'organizations'
   | 'billing'
-  | 'scan-logs';
+  | 'scan-logs'
+  | 'reports'
+  | 'audit-logs';
 
 interface AppState {
   currentPage: PageName;

@@ -36,6 +36,8 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Zap,
+  BarChart3,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
@@ -74,7 +76,9 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from '@/components/ui/chart';
+import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 // ── Types ────────────────────────────────────────────────────────────
 interface AnalyticsData {
@@ -141,7 +145,22 @@ const scansChartConfig = {
   },
 } satisfies ChartConfig;
 
+const hourlyChartConfig = {
+  scans: {
+    label: 'Scans',
+    color: '#f59e0b',
+  },
+} satisfies ChartConfig;
+
+const ticketTypeChartConfig = {
+  Standard: { label: 'Standard', color: '#10b981' },
+  VIP: { label: 'VIP', color: '#f59e0b' },
+  Premium: { label: 'Premium', color: '#8b5cf6' },
+  'Early Bird': { label: 'Early Bird', color: '#06b6d4' },
+} satisfies ChartConfig;
+
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const TYPE_COLORS = ['#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
 
 // ── Helpers ──────────────────────────────────────────────────────────
 function formatCurrency(amount: number): string {
@@ -249,6 +268,24 @@ function TableSkeleton() {
   );
 }
 
+// ── Enhanced Stats Types ─────────────────────────────────────────
+interface StatsData {
+  kpis: {
+    totalRevenueMonth: number;
+    totalTicketsSoldMonth: number;
+    totalScansToday: number;
+    totalScansWeek: number;
+    totalTicketsAll: number;
+    totalActiveEvents: number;
+    validationRate: number;
+    lastUpdated: string;
+  };
+  dailyRevenue: Array<{ date: string; revenue: number }>;
+  hourlyTraffic: Array<{ hour: number; scans: number }>;
+  topEvents: Array<{ id: string; name: string; revenue: number; ticketsSold: number; scans: number }>;
+  ticketTypeDistribution: Array<{ type: string; count: number }>;
+}
+
 // ── Main Dashboard ───────────────────────────────────────────────────
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
@@ -274,6 +311,25 @@ export default function Dashboard() {
     retry: 1,
   });
 
+  // Enhanced stats (cached, for hourly traffic + ticket types)
+  const { data: statsData } = useQuery<StatsData>({
+    queryKey: ['stats'],
+    queryFn: async () => {
+      const token = useAuthStore.getState().token;
+      const orgId = useOrgStore.getState().currentOrganization?.id;
+      const res = await fetch('/api/stats', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
+        },
+      });
+      if (!res.ok) throw new Error('Failed to fetch stats');
+      return res.json();
+    },
+    refetchInterval: 60000,
+    retry: 1,
+  });
+
   // Computed metrics
   const ticketsByStatusData = data
     ? Object.entries(data.ticketsByStatus).map(([key, value]) => ({
@@ -290,10 +346,25 @@ export default function Dashboard() {
       }))
     : [];
 
-  const dailyScansChartData = data
-    ? data.dailyScans.map((d) => ({
+  const dailyRevenueChartData = statsData
+    ? statsData.dailyRevenue.map((d) => ({
         date: format(new Date(d.date), 'MMM d'),
-        count: d.count,
+        revenue: d.revenue,
+      }))
+    : [];
+
+  const hourlyTrafficChartData = statsData
+    ? statsData.hourlyTraffic.map((h) => ({
+        hour: `${String(h.hour).padStart(2, '0')}:00`,
+        scans: h.scans,
+      }))
+    : [];
+
+  const ticketTypeChartData = statsData
+    ? statsData.ticketTypeDistribution.map((t, i) => ({
+        name: t.type,
+        value: t.count,
+        fill: TYPE_COLORS[i % TYPE_COLORS.length],
       }))
     : [];
 
@@ -325,11 +396,21 @@ export default function Dashboard() {
     },
     {
       label: 'Scans Today',
-      value: data ? formatNumber(data.scansToday) : '—',
+      value: statsData ? formatNumber(statsData.kpis.totalScansToday) : data ? formatNumber(data.scansToday) : '—',
       icon: <ScanLine className="size-5 text-green-600" />,
       iconBg: 'bg-green-100 dark:bg-green-950',
-      trend: data && data.scansToday > 15 ? 24.1 : -3.2,
+      trend: statsData && statsData.kpis.totalScansToday > 15 ? 24.1 : -3.2,
       trendLabel: 'vs yesterday',
+    },
+    {
+      label: 'Validation Rate',
+      value: statsData ? `${(statsData.kpis.validationRate * 100).toFixed(1)}%` : '—',
+      icon: <Zap className="size-5 text-amber-600" />,
+      iconBg: 'bg-amber-100 dark:bg-amber-950',
+      trend: 0,
+      trendLabel: statsData ? 'used / (active + used)' : '',
+      isProgress: true,
+      progressValue: statsData ? statsData.kpis.validationRate * 100 : 0,
     },
   ];
 
@@ -387,23 +468,24 @@ export default function Dashboard() {
       )}
 
       {/* ── KPI Cards ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {isLoading
-          ? Array.from({ length: 4 }).map((_, i) => <KpiCardSkeleton key={i} />)
+          ? Array.from({ length: 5 }).map((_, i) => <KpiCardSkeleton key={i} />)
           : kpis.map((kpi, i) => (
               <Card key={i} className="relative overflow-hidden">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${kpi.iconBg}`}>
+                    <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', kpi.iconBg)}>
                       {kpi.icon}
                     </div>
-                    {kpi.trend !== 0 && (
+                    {kpi.trend !== 0 && !(kpi as Record<string, unknown>).isProgress && (
                       <div
-                        className={`flex items-center gap-0.5 text-xs font-medium ${
+                        className={cn(
+                          'flex items-center gap-0.5 text-xs font-medium',
                           kpi.trend > 0
                             ? 'text-emerald-600 dark:text-emerald-400'
                             : 'text-red-600 dark:text-red-400'
-                        }`}
+                        )}
                       >
                         {kpi.trend > 0 ? (
                           <ArrowUpRight className="size-3" />
@@ -418,6 +500,9 @@ export default function Dashboard() {
                     <p className="text-2xl font-bold tracking-tight">{kpi.value}</p>
                     <p className="mt-0.5 text-muted-foreground text-xs">{kpi.label}</p>
                   </div>
+                  {(kpi as Record<string, unknown>).isProgress && (
+                    <Progress value={(kpi as Record<string, unknown>).progressValue as number} className="mt-2 h-1.5" />
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -511,6 +596,47 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {/* Daily Revenue (Area Chart) */}
+        {isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Daily Revenue</CardTitle>
+              <CardDescription>Revenue trend over the past 7 days</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {dailyRevenueChartData.length === 0 || dailyRevenueChartData.every(d => d.revenue === 0) ? (
+                <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
+                  No revenue data available yet
+                </div>
+              ) : (
+                <ChartContainer config={revenueChartConfig} className="h-[280px] w-full">
+                  <AreaChart data={dailyRevenueChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#059669" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
+                    <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#059669"
+                      fill="url(#revenueGradient)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Ticket Status Distribution (Donut Chart) */}
         {isLoading ? (
           <ChartSkeleton />
@@ -553,41 +679,77 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Validation Activity (Line Chart) */}
+        {/* Hourly Traffic (Bar Chart) */}
         {isLoading ? (
           <ChartSkeleton />
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Validation Activity</CardTitle>
-              <CardDescription>Daily scan/validation volume over time</CardDescription>
+              <CardTitle className="text-base">Hourly Traffic</CardTitle>
+              <CardDescription>Scan volume by hour of day</CardDescription>
             </CardHeader>
             <CardContent>
-              {dailyScansChartData.length === 0 ? (
+              {hourlyTrafficChartData.length === 0 ? (
                 <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
-                  No validation activity recorded
+                  No traffic data available
                 </div>
               ) : (
-                <ChartContainer config={scansChartConfig} className="h-[280px] w-full">
-                  <LineChart data={dailyScansChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <ChartContainer config={hourlyChartConfig} className="h-[280px] w-full">
+                  <BarChart data={hourlyTrafficChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
-                      dataKey="date"
+                      dataKey="hour"
                       tickLine={false}
                       axisLine={false}
                       tickMargin={8}
+                      interval={2}
                     />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#14b8a6"
-                      strokeWidth={2}
-                      dot={{ r: 4, fill: '#14b8a6' }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
+                    <Bar dataKey="scans" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Ticket Type Distribution (Donut Chart) */}
+        {isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Ticket Types</CardTitle>
+              <CardDescription>Distribution of ticket types sold</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {ticketTypeChartData.length === 0 ? (
+                <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
+                  No ticket type data available
+                </div>
+              ) : (
+                <ChartContainer config={ticketTypeChartConfig} className="h-[280px] w-full">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                    <Pie
+                      data={ticketTypeChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, value }) => `${name}: ${value}`}
+                      labelLine={false}
+                    >
+                      {ticketTypeChartData.map((entry, index) => (
+                        <Cell key={index} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+                  </PieChart>
                 </ChartContainer>
               )}
             </CardContent>

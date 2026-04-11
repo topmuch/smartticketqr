@@ -22,6 +22,8 @@ import {
   Check,
   CreditCard,
   ClipboardList,
+  BarChart3,
+  ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -68,6 +70,8 @@ const navItems: NavItem[] = [
   { id: 'organizations', label: 'Organizations', icon: Building2, roles: ['super_admin', 'admin'] },
   { id: 'billing', label: 'Billing & Plans', icon: CreditCard, roles: ['super_admin', 'admin'] },
   { id: 'scan-logs', label: 'Scan Logs', icon: ClipboardList, roles: ['super_admin', 'admin'] },
+  { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+  { id: 'audit-logs', label: 'Audit Logs', icon: ShieldCheck, roles: ['super_admin', 'admin'] },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 

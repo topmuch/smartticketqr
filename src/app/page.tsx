@@ -16,6 +16,8 @@ import SettingsPage from '@/components/smart-ticket/settings-page';
 import OrganizationsPage from '@/components/smart-ticket/organizations-page';
 import BillingPage from '@/components/smart-ticket/billing-page';
 import ScanLogsPage from '@/components/smart-ticket/scan-logs-page';
+import ReportsPage from '@/components/smart-ticket/reports-page';
+import AuditLogsPage from '@/components/smart-ticket/audit-logs-page';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
   login: LoginPage,
@@ -30,6 +32,8 @@ const pageComponents: Record<PageName, React.ComponentType> = {
   organizations: OrganizationsPage,
   billing: BillingPage,
   'scan-logs': ScanLogsPage,
+  reports: ReportsPage,
+  'audit-logs': AuditLogsPage,
 };
 
 export default function Home() {

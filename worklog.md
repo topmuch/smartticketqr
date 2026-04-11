@@ -257,3 +257,74 @@ Stage Summary:
 - Plan limit enforcement UI: upgrade dialogs on events and users pages
 - All API calls include Authorization + X-Organization-Id headers
 - Key artifacts: src/components/smart-ticket/billing-page.tsx, src/components/smart-ticket/subscription-banner.tsx, updated app-shell.tsx, page.tsx, events-page.tsx, users-page.tsx, app-store.ts
+
+---
+Task ID: p4-frontend-pages
+Agent: Frontend Agent
+Task: Phase 4 frontend - Reports page + Audit Logs page
+
+Work Log:
+- Created reports-page.tsx: filterable ticket report with CSV/PDF export
+- Created audit-logs-page.tsx: security audit log viewer with filters
+
+Stage Summary:
+- 2 new page components for Phase 4
+- Reports page with server-side pagination and multi-format export
+- Audit logs page with severity-coded badges and detail expansion
+
+---
+Task ID: p4-backend
+Agent: Backend Agent
+Task: Phase 4 backend - StatsManager, AuditLogger, API routes
+
+Work Log:
+- Created src/lib/stats-manager.ts with cached stats computation
+- Created src/lib/audit-logger.ts for security audit logging
+- Created src/app/api/stats/route.ts (enhanced analytics endpoint)
+- Created src/app/api/stats/refresh/route.ts (force cache refresh)
+- Created src/app/api/reports/tickets/route.ts (paginated filterable report)
+- Created src/app/api/reports/export-csv/route.ts (CSV export with BOM)
+- Created src/app/api/reports/export-pdf/route.ts (PDF export with org branding)
+- Created src/app/api/audit-logs/route.ts (admin audit log listing)
+
+Stage Summary:
+- 8 new backend files for Phase 4 analytics & reporting
+- Stats cache system for dashboard performance
+- CSV/PDF export with organization branding
+- Audit logging for security-sensitive actions
+
+---
+Task ID: p4-integration
+Agent: Main
+Task: Phase 4 integration — schema, navigation, dashboard enhancement, frontend fixes
+
+Work Log:
+- Added OrgStatsCache + AuditLog models to Prisma schema with proper relations (User -> AuditLog, Organization -> AuditLog/OrgStatsCache)
+- Pushed schema to SQLite, generated Prisma Client
+- Updated app-store.ts: Added 'reports' and 'audit-logs' to PageName type
+- Updated app-shell.tsx: Added BarChart3 + ShieldCheck icons, "Reports & Analytics" nav item (all roles), "Audit Logs" nav item (admin+)
+- Updated page.tsx: Added ReportsPage + AuditLogsPage imports and route mappings
+- Fixed reports-page.tsx API endpoint URLs: /api/reports -> /api/reports/tickets, parameter names (event/eventId, type/ticketType, from/startDate)
+- Fixed reports-page.tsx response type: pagination.total instead of top-level total
+- Fixed audit-logs-page.tsx: response type (pagination.total), parameter names (from/startDate), field names (targetType/target), details rendering (JSON object support)
+- Enhanced dashboard.tsx:
+  - Added second data source from /api/stats (cached KPIs with 60s refresh)
+  - Added 5th KPI card: Validation Rate with progress bar
+  - Changed grid to 5 columns on desktop for KPIs
+  - Added Daily Revenue area chart (from stats endpoint)
+  - Added Hourly Traffic bar chart (24h scan distribution)
+  - Added Ticket Type Distribution donut chart
+  - Removed duplicate validation activity line chart
+  - Added Progress component import for validation rate bar
+  - Added Zap, BarChart3, cn imports
+- All ESLint checks pass: 0 errors
+- Dev server compiles successfully on port 3000
+
+Stage Summary:
+- Phase 4 fully integrated: 10 new files, 6 updated files
+- Enhanced dashboard with 6 charts (was 4), 5 KPI cards (was 4)
+- Reports page with filterable data table + CSV/PDF export
+- Audit Logs page with security event filtering and detail expansion
+- Performance optimization via OrgStatsCache (5-minute TTL auto-refresh)
+- Audit logging system ready for integration into sensitive operations
+- Key new artifacts: src/lib/stats-manager.ts, src/lib/audit-logger.ts, src/components/smart-ticket/reports-page.tsx, src/components/smart-ticket/audit-logs-page.tsx
