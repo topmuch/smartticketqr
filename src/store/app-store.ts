@@ -17,7 +17,12 @@ export type PageName =
   | 'reports'
   | 'audit-logs'
   | 'api-keys'
-  | 'webhooks';
+  | 'webhooks'
+  | 'custom-domains'
+  | 'automation'
+  | 'support'
+  | 'affiliates'
+  | 'fraud-alerts';
 
 interface AppState {
   currentPage: PageName;
