@@ -20,6 +20,11 @@ import ReportsPage from '@/components/smart-ticket/reports-page';
 import AuditLogsPage from '@/components/smart-ticket/audit-logs-page';
 import ApiKeysPage from '@/components/smart-ticket/api-keys-page';
 import WebhooksPage from '@/components/smart-ticket/webhooks-page';
+import FraudAlertsPage from '@/components/smart-ticket/fraud-alerts-page';
+import CustomDomainsPage from '@/components/smart-ticket/custom-domains-page';
+import AutomationPage from '@/components/smart-ticket/automation-page';
+import SupportPage from '@/components/smart-ticket/support-page';
+import AffiliatesPage from '@/components/smart-ticket/affiliates-page';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
   login: LoginPage,
@@ -38,6 +43,11 @@ const pageComponents: Record<PageName, React.ComponentType> = {
   'audit-logs': AuditLogsPage,
   'api-keys': ApiKeysPage,
   webhooks: WebhooksPage,
+  'fraud-alerts': FraudAlertsPage,
+  'custom-domains': CustomDomainsPage,
+  'automation': AutomationPage,
+  'support': SupportPage,
+  'affiliates': AffiliatesPage,
 };
 
 export default function Home() {

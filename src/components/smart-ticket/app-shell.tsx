@@ -26,6 +26,11 @@ import {
   ShieldCheck,
   KeyRound,
   Webhook,
+  ShieldAlert,
+  Globe,
+  Zap,
+  Headphones,
+  Handshake,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -77,6 +82,11 @@ const navItems: NavItem[] = [
   { id: 'audit-logs', label: 'Audit Logs', icon: ShieldCheck, roles: ['super_admin', 'admin'] },
   { id: 'api-keys', label: 'API Keys', icon: KeyRound, roles: ['super_admin', 'admin'] },
   { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['super_admin', 'admin'] },
+  { id: 'fraud-alerts', label: 'Fraud Alerts', icon: ShieldAlert, roles: ['super_admin', 'admin'] },
+  { id: 'custom-domains', label: 'Custom Domains', icon: Globe, roles: ['super_admin', 'admin'] },
+  { id: 'automation', label: 'Automation', icon: Zap, roles: ['super_admin', 'admin'] },
+  { id: 'support', label: 'Support', icon: Headphones },
+  { id: 'affiliates', label: 'Affiliates', icon: Handshake, roles: ['super_admin', 'admin'] },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
