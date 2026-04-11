@@ -91,6 +91,9 @@ model Organization {
   transactions  Transaction[]
   activityLogs  ActivityLog[]
   subscriptions Subscription[]
+  orgSecret     OrgSecret?
+  scanLogs      ScanLog[]
+  offlineQueue  OfflineScanQueue[]
 
   @@index([slug])
   @@index([subscriptionStatus])
@@ -136,6 +139,8 @@ model Event {
   type           String   @default("event")
   description    String?
   location       String?
+  latitude       Float?
+  longitude      Float?
   startDate      DateTime
   endDate        DateTime
   totalTickets   Int      @default(100)
@@ -209,6 +214,10 @@ model Scan {
   result         String   @default("valid")
   deviceInfo     String?
   location       String?
+  latitude       Float?
+  longitude      Float?
+  geoAlert       Boolean  @default(false)
+  isSynced       Boolean  @default(true)
   createdAt      DateTime @default(now())
 
   organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -254,6 +263,72 @@ model Transaction {
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
+}
+
+// ============================================================
+// 🔑 ORG SECRETS (HMAC key per org for QR signing)
+// ============================================================
+model OrgSecret {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  hmacSecret     String
+  previousSecret String?
+  rotatedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// ============================================================
+// 📲 SCAN LOGS (audit trail with geo + device data)
+// ============================================================
+model ScanLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  ticketId       String
+  eventId        String
+  operatorId     String
+  scannedAt      DateTime @default(now())
+  status         String                                    // valid, used, expired, invalid
+  latitude       Float?
+  longitude      Float?
+  deviceUA       String?
+  isSynced       Boolean  @default(true)
+  geoAlert       Boolean  @default(false)
+  geoDistance    Float?
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, ticketId])
+  @@index([organizationId, scannedAt])
+  @@index([operatorId])
+  @@index([status])
+}
+
+// ============================================================
+// 📴 OFFLINE SCAN QUEUE (pending sync from PWA)
+// ============================================================
+model OfflineScanQueue {
+  id             String   @id @default(cuid())
+  organizationId String
+  ticketHash     String
+  operatorId     String?
+  scannedAt      DateTime @default(now())
+  latitude       Float?
+  longitude      Float?
+  syncStatus     String   @default("pending")     // pending, synced, failed
+  retryCount     Int      @default(0)
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+  syncedAt       DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([syncStatus])
+  @@index([organizationId, syncStatus])
+  @@index([createdAt])
 }
 
 // ============================================================

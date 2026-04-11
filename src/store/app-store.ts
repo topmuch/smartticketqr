@@ -12,7 +12,8 @@ export type PageName =
   | 'activity-logs'
   | 'settings'
   | 'organizations'
-  | 'billing';
+  | 'billing'
+  | 'scan-logs';
 
 interface AppState {
   currentPage: PageName;

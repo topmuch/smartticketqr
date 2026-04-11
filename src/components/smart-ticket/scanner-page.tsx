@@ -20,6 +20,12 @@ import {
   QrCode,
   Keyboard,
   Volume2,
+  VolumeX,
+  Wifi,
+  WifiOff,
+  MapPin,
+  RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,8 +37,23 @@ import { Separator } from '@/components/ui/separator';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
 
+// ============================================================
+// Types
+// ============================================================
+
 interface ValidateResponse {
-  valid: boolean;
+  success: boolean;
+  status: 'valid' | 'used' | 'expired' | 'invalid';
+  sound_hint: 'success' | 'error';
+  message: string;
+  qr_verified?: boolean;
+  scan_id?: string;
+  geo: {
+    within_threshold: boolean;
+    distance: number | null;
+    max_distance: number;
+    alert: string | null;
+  } | null;
   ticket: {
     id: string;
     ticketCode: string;
@@ -41,6 +62,8 @@ interface ValidateResponse {
     holderEmail?: string;
     holderPhone?: string;
     seatNumber?: string;
+    price?: number;
+    currency?: string;
     validatedAt?: string;
     event: {
       id?: string;
@@ -50,7 +73,6 @@ interface ValidateResponse {
       startDate?: string;
     };
   } | null;
-  message: string;
 }
 
 interface ScanRecord {
@@ -86,6 +108,18 @@ interface ScanHistoryResponse {
   totalPages: number;
 }
 
+interface OfflineQueueItem {
+  ticketCode: string;
+  scannedAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  synced: boolean;
+}
+
+// ============================================================
+// API Helper
+// ============================================================
+
 function getApiHeaders() {
   const token = useAuthStore.getState().token;
   const orgId = useOrgStore.getState().currentOrganization?.id;
@@ -96,21 +130,224 @@ function getApiHeaders() {
   };
 }
 
+// ============================================================
+// IndexedDB Helpers (Offline Queue)
+// ============================================================
+
+const DB_NAME = 'smartticket-offline';
+const DB_VERSION = 1;
+const STORE_NAME = 'scan-queue';
+
+function openDB(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'ticketCode' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => {
+        console.warn('[IndexedDB] Failed to open database');
+        resolve(null);
+      };
+    } catch {
+      console.warn('[IndexedDB] Not available (private browsing?)');
+      resolve(null);
+    }
+  });
+}
+
+async function addToOfflineQueue(item: OfflineQueueItem): Promise<void> {
+  try {
+    const db = await openDB();
+    if (!db) return;
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put(item);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => {
+      console.warn('[IndexedDB] Failed to add item to queue');
+      db.close();
+    };
+  } catch {
+    // Graceful degradation — IndexedDB not available
+  }
+}
+
+async function getOfflineQueue(): Promise<OfflineQueueItem[]> {
+  try {
+    const db = await openDB();
+    if (!db) return [];
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const items = request.result as OfflineQueueItem[];
+        db.close();
+        resolve(items);
+      };
+      request.onerror = () => {
+        db.close();
+        resolve([]);
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function clearOfflineQueue(): Promise<void> {
+  try {
+    const db = await openDB();
+    if (!db) return;
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => db.close();
+  } catch {
+    // Graceful degradation
+  }
+}
+
+async function syncOfflineQueue(): Promise<void> {
+  const queue = await getOfflineQueue();
+  const unsynced = queue.filter((item) => !item.synced);
+  if (unsynced.length === 0) return;
+
+  try {
+    const res = await fetch('/api/offline-sync', {
+      method: 'POST',
+      headers: getApiHeaders(),
+      body: JSON.stringify({ scans: unsynced }),
+    });
+    if (res.ok) {
+      await clearOfflineQueue();
+      toast.success(`Synced ${unsynced.length} offline scan(s)`);
+    } else {
+      toast.error('Offline sync failed — will retry when back online');
+    }
+  } catch {
+    toast.error('Offline sync failed — will retry when back online');
+  }
+}
+
+// ============================================================
+// Geolocation Helper
+// ============================================================
+
+function getGeolocation(): Promise<{ latitude: number | null; longitude: number | null }> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({ latitude: null, longitude: null });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      },
+      () => {
+        // Respect privacy — fail silently
+        resolve({ latitude: null, longitude: null });
+      },
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+    );
+  });
+}
+
+// ============================================================
+// Audio & Vibration Helpers
+// ============================================================
+
+function vibrateSuccess() {
+  try {
+    if (navigator.vibrate) navigator.vibrate([100]);
+  } catch {
+    // Not available
+  }
+}
+
+function vibrateError() {
+  try {
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  } catch {
+    // Not available
+  }
+}
+
+// ============================================================
+// Component
+// ============================================================
+
 export default function ScannerPage() {
+  // -- State --
   const [ticketCode, setTicketCode] = useState('');
   const [scanResult, setScanResult] = useState<ValidateResponse | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [showViewfinder, setShowViewfinder] = useState(false);
   const [flashColor, setFlashColor] = useState<'green' | 'red' | null>(null);
   const [scanCount, setScanCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
+  const [syncQueueCount, setSyncQueueCount] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [scannerStarted, setScannerStarted] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const successAudioRef = useRef<HTMLAudioElement | null>(null);
+  const errorAudioRef = useRef<HTMLAudioElement | null>(null);
   const queryClient = useQueryClient();
 
-  // Track today's scan count
+  // ============================================================
+  // Online/Offline Status
+  // ============================================================
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Back online — syncing queued scans...');
+      syncOfflineQueue().then(() => refreshSyncQueueCount());
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('You are offline — scans will be queued');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // ============================================================
+  // Sync Queue Count Polling
+  // ============================================================
+
+  const refreshSyncQueueCount = useCallback(async () => {
+    const queue = await getOfflineQueue();
+    setSyncQueueCount(queue.filter((item) => !item.synced).length);
+  }, []);
+
+  useEffect(() => {
+    refreshSyncQueueCount();
+    const interval = setInterval(refreshSyncQueueCount, 5000);
+    return () => clearInterval(interval);
+  }, [refreshSyncQueueCount]);
+
+  // ============================================================
+  // Today's Scan Count
+  // ============================================================
+
   useEffect(() => {
     const token = useAuthStore.getState().token;
     if (!token) return;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     fetch(`/api/scans?page=1&limit=1&startDate=${today.toISOString()}`, {
@@ -123,7 +360,10 @@ export default function ScannerPage() {
       .catch(() => {});
   }, [scanResult]);
 
-  // Fetch scan history
+  // ============================================================
+  // Scan History Query
+  // ============================================================
+
   const { data: scanHistory, isLoading: historyLoading } = useQuery<ScanHistoryResponse>({
     queryKey: ['scan-history'],
     queryFn: async () => {
@@ -135,13 +375,50 @@ export default function ScannerPage() {
     },
   });
 
-  // Validate ticket mutation
+  // ============================================================
+  // Audio Initialization (on user gesture)
+  // ============================================================
+
+  const initAudio = useCallback(() => {
+    if (successAudioRef.current && errorAudioRef.current) return;
+    try {
+      successAudioRef.current = new Audio('/audio/success.wav');
+      errorAudioRef.current = new Audio('/audio/error.wav');
+      successAudioRef.current.preload = 'auto';
+      errorAudioRef.current.preload = 'auto';
+    } catch {
+      // Audio not supported
+    }
+  }, []);
+
+  const playSound = useCallback((hint: 'success' | 'error') => {
+    if (!soundEnabled) return;
+    try {
+      const audio = hint === 'success' ? successAudioRef.current : errorAudioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      } else {
+        // Audio not initialized, use vibration only
+        if (hint === 'success') vibrateSuccess();
+        else vibrateError();
+      }
+    } catch {
+      if (hint === 'success') vibrateSuccess();
+      else vibrateError();
+    }
+  }, [soundEnabled]);
+
+  // ============================================================
+  // Validate Mutation
+  // ============================================================
+
   const validateMutation = useMutation({
-    mutationFn: async (code: string) => {
+    mutationFn: async ({ code, lat, lng }: { code: string; lat: number | null; lng: number | null }) => {
       const res = await fetch('/api/tickets/validate', {
         method: 'POST',
         headers: getApiHeaders(),
-        body: JSON.stringify({ ticketCode: code }),
+        body: JSON.stringify({ ticketCode: code, latitude: lat, longitude: lng }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Validation failed' }));
@@ -151,16 +428,41 @@ export default function ScannerPage() {
     },
     onSuccess: (data) => {
       setScanResult(data);
-      setFlashColor(data.valid ? 'green' : 'red');
+      setFlashColor(data.status === 'valid' ? 'green' : 'red');
       setScanCount((prev) => prev + 1);
 
-      if (data.valid) {
+      // Play audio + vibration based on sound_hint
+      if (data.sound_hint === 'success') {
+        playSound('success');
+        vibrateSuccess();
+      } else {
+        playSound('error');
+        vibrateError();
+      }
+
+      if (data.status === 'valid') {
         toast.success('Ticket validated!', {
           description: `${data.ticket?.holderName} - ${data.ticket?.event.name}`,
+        });
+      } else if (data.status === 'used') {
+        toast.warning('Ticket already used', {
+          description: data.message,
+        });
+      } else if (data.status === 'expired') {
+        toast.warning('Ticket expired', {
+          description: data.message,
         });
       } else {
         toast.error('Validation failed', {
           description: data.message,
+        });
+      }
+
+      // Geo alert banner
+      if (data.geo?.alert) {
+        toast.warning('Location Alert', {
+          description: data.geo.alert,
+          duration: 6000,
         });
       }
 
@@ -170,21 +472,80 @@ export default function ScannerPage() {
     onError: (error) => {
       toast.error('Error', { description: error.message });
       setFlashColor('red');
+      playSound('error');
+      vibrateError();
       setTimeout(() => setFlashColor(null), 1500);
     },
   });
 
-  const handleScan = useCallback(() => {
+  // ============================================================
+  // Scan Handler
+  // ============================================================
+
+  const handleScan = useCallback(async () => {
     const code = ticketCode.trim();
     if (!code) {
       toast.error('Please enter a ticket code');
       return;
     }
+
+    // Initialize audio on first scan (user gesture)
+    initAudio();
+    setScannerStarted(true);
+
     setIsScanning(true);
-    validateMutation.mutate(code, {
-      onSettled: () => setIsScanning(false),
-    });
-  }, [ticketCode, validateMutation]);
+
+    try {
+      // Capture geolocation
+      const geo = await getGeolocation();
+
+      // Check online status
+      if (!navigator.onLine) {
+        // Offline: queue the scan in IndexedDB
+        await addToOfflineQueue({
+          ticketCode: code,
+          scannedAt: new Date().toISOString(),
+          latitude: geo.latitude,
+          longitude: geo.longitude,
+          synced: false,
+        });
+        await refreshSyncQueueCount();
+
+        // Show a local result so the scanner doesn't feel broken
+        setScanResult({
+          success: false,
+          status: 'valid',
+          sound_hint: 'success',
+          message: 'Scan queued offline — will sync when connection is restored',
+          geo: null,
+          ticket: {
+            id: 'offline',
+            ticketCode: code,
+            ticketType: 'Queued',
+            holderName: 'Offline Scan',
+            event: {
+              name: 'Pending Sync',
+            },
+          },
+        });
+        setFlashColor('green');
+        playSound('success');
+        vibrateSuccess();
+        setTimeout(() => setFlashColor(null), 1500);
+        toast.success('Scan queued offline', {
+          description: 'Will sync when you are back online',
+        });
+      } else {
+        // Online: call the validation API
+        validateMutation.mutate({ code, lat: geo.latitude, lng: geo.longitude });
+      }
+    } catch {
+      // Fallback: try API call without geo
+      validateMutation.mutate({ code, lat: null, lng: null });
+    } finally {
+      setIsScanning(false);
+    }
+  }, [ticketCode, validateMutation, initAudio, playSound, refreshSyncQueueCount]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -198,11 +559,19 @@ export default function ScannerPage() {
     setFlashColor(null);
   };
 
+  const handleStartScanner = useCallback(() => {
+    initAudio();
+    setScannerStarted(true);
+    setShowViewfinder(true);
+  }, [initAudio]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Extract text from filename or prompt user
+    initAudio();
+    setScannerStarted(true);
+
     const name = file.name.replace(/\.[^/.]+$/, '');
     if (name && name.length > 3) {
       setTicketCode(name);
@@ -213,20 +582,50 @@ export default function ScannerPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleManualSync = useCallback(async () => {
+    if (!navigator.onLine) {
+      toast.error('Still offline — cannot sync now');
+      return;
+    }
+    toast.info('Syncing offline scans...');
+    await syncOfflineQueue();
+    await refreshSyncQueueCount();
+  }, [refreshSyncQueueCount]);
+
+  // ============================================================
+  // Result Helpers
+  // ============================================================
+
   const getResultIcon = () => {
     if (!scanResult) return null;
-    if (scanResult.valid) return <CheckCircle2 className="h-6 w-6 text-emerald-500" />;
-    return <XCircle className="h-6 w-6 text-red-500" />;
+    switch (scanResult.status) {
+      case 'valid':
+        return <CheckCircle2 className="h-6 w-6 text-emerald-500" />;
+      case 'used':
+        return <AlertTriangle className="h-6 w-6 text-amber-500" />;
+      case 'expired':
+        return <Clock className="h-6 w-6 text-amber-500" />;
+      default:
+        return <XCircle className="h-6 w-6 text-red-500" />;
+    }
   };
 
-  const getResultBadge = () => {
-    if (!scanResult) return null;
-    return scanResult.valid ? (
-      <Badge className="bg-emerald-500 text-white hover:bg-emerald-600">Valid</Badge>
-    ) : (
-      <Badge variant="destructive">Invalid</Badge>
-    );
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'valid':
+        return <Badge className="bg-emerald-500 text-white hover:bg-emerald-600">Valid</Badge>;
+      case 'used':
+        return <Badge className="bg-amber-500 text-white hover:bg-amber-600">Used</Badge>;
+      case 'expired':
+        return <Badge className="bg-amber-500 text-white hover:bg-amber-600">Expired</Badge>;
+      default:
+        return <Badge variant="destructive">Invalid</Badge>;
+    }
   };
+
+  // ============================================================
+  // Render
+  // ============================================================
 
   return (
     <div className="space-y-6">
@@ -239,20 +638,99 @@ export default function ScannerPage() {
           </h2>
           <p className="text-muted-foreground">Scan or enter ticket codes to validate</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="text-sm px-3 py-1">
-            <ScanLine className="h-3.5 w-3.5 mr-1.5" />
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Offline/Online Status Badge */}
+          <Badge
+            variant="outline"
+            className={`text-sm px-3 py-1 gap-1.5 ${
+              isOnline
+                ? 'border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400'
+                : 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400'
+            }`}
+          >
+            {isOnline ? (
+              <Wifi className="h-3.5 w-3.5" />
+            ) : (
+              <WifiOff className="h-3.5 w-3.5" />
+            )}
+            {isOnline ? 'Online' : 'Offline'}
+          </Badge>
+
+          {/* Sync Queue Count Badge */}
+          {syncQueueCount > 0 && (
+            <Badge
+              variant="outline"
+              className="text-sm px-3 py-1 gap-1.5 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 cursor-pointer"
+              onClick={handleManualSync}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {syncQueueCount} pending
+            </Badge>
+          )}
+
+          {/* Scan Count Badge */}
+          <Badge variant="outline" className="text-sm px-3 py-1 gap-1.5">
+            <ScanLine className="h-3.5 w-3.5" />
             {scanCount} scans today
           </Badge>
-          <Badge variant="outline" className="text-sm px-3 py-1">
-            <Volume2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-            Sound On
-          </Badge>
+
+          {/* Sound Toggle */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            title={soundEnabled ? 'Mute sounds' : 'Enable sounds'}
+          >
+            {soundEnabled ? (
+              <Volume2 className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <VolumeX className="h-4 w-4 text-muted-foreground" />
+            )}
+          </Button>
         </div>
       </div>
 
+      {/* Offline Alert Banner */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/30">
+              <WifiOff className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  You are offline
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Scans will be queued locally and synced automatically when you reconnect.
+                  {syncQueueCount > 0 && ` ${syncQueueCount} scan(s) waiting.`}
+                </p>
+              </div>
+              {isOnline && syncQueueCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={handleManualSync}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  Sync Now
+                </Button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ============================================================ */}
         {/* Left: Scanner Area */}
+        {/* ============================================================ */}
         <div className="space-y-4">
           {/* Viewfinder Card */}
           <Card className="overflow-hidden relative">
@@ -325,16 +803,16 @@ export default function ScannerPage() {
                   </div>
                 )}
 
-                {/* Scan button overlay */}
+                {/* Scanner controls overlay */}
                 <div className="absolute bottom-4 right-4 flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
-                    onClick={() => setShowViewfinder(!showViewfinder)}
+                    onClick={showViewfinder ? () => setShowViewfinder(false) : handleStartScanner}
                   >
                     <Camera className="h-4 w-4 mr-1.5" />
-                    {showViewfinder ? 'Hide' : 'Scanner'}
+                    {showViewfinder ? 'Hide' : 'Start Scanner'}
                   </Button>
                 </div>
               </div>
@@ -411,6 +889,7 @@ export default function ScannerPage() {
           <AnimatePresence mode="wait">
             {scanResult && (
               <motion.div
+                key={scanResult.scan_id || scanResult.ticket?.ticketCode || 'result'}
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -418,21 +897,57 @@ export default function ScannerPage() {
               >
                 <Card
                   className={`border-2 ${
-                    scanResult.valid
+                    scanResult.status === 'valid'
                       ? 'border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20'
-                      : 'border-red-500/50 bg-red-50/50 dark:bg-red-950/20'
+                      : scanResult.status === 'used'
+                        ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20'
+                        : scanResult.status === 'expired'
+                          ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20'
+                          : 'border-red-500/50 bg-red-50/50 dark:bg-red-950/20'
                   }`}
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base flex items-center gap-2">
                         {getResultIcon()}
-                        {scanResult.valid ? 'Ticket Valid' : 'Ticket Invalid'}
+                        {scanResult.status === 'valid'
+                          ? 'Ticket Valid'
+                          : scanResult.status === 'used'
+                            ? 'Ticket Already Used'
+                            : scanResult.status === 'expired'
+                              ? 'Ticket Expired'
+                              : 'Ticket Invalid'}
                       </CardTitle>
-                      {getResultBadge()}
+                      {getStatusBadge(scanResult.status)}
                     </div>
                     <p className="text-sm text-muted-foreground">{scanResult.message}</p>
+
+                    {/* QR Verification Badge */}
+                    {scanResult.qr_verified && (
+                      <Badge variant="outline" className="mt-2 gap-1 text-xs border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400">
+                        <ShieldAlert className="h-3 w-3" />
+                        QR Signature Verified
+                      </Badge>
+                    )}
                   </CardHeader>
+
+                  {/* Geo Alert Banner */}
+                  {scanResult.geo?.alert && (
+                    <div className="px-6 pb-2">
+                      <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-700 dark:bg-amber-950/30">
+                        <MapPin className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                            Location Alert
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-400">
+                            {scanResult.geo.alert}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {scanResult.ticket && (
                     <CardContent>
                       <div className="space-y-3">
@@ -463,10 +978,68 @@ export default function ScannerPage() {
                           </div>
                         </div>
 
+                        {/* Geo Distance Display */}
+                        {scanResult.geo && scanResult.geo.distance !== null && (
+                          <div className="flex items-center gap-2 rounded-md border p-2.5 bg-muted/30">
+                            <MapPin
+                              className={`h-4 w-4 shrink-0 ${
+                                scanResult.geo.within_threshold
+                                  ? 'text-emerald-500'
+                                  : 'text-red-500'
+                              }`}
+                            />
+                            <div className="flex-1">
+                              <p className="text-xs font-medium">
+                                Distance:{' '}
+                                {scanResult.geo.distance < 1
+                                  ? `${Math.round(scanResult.geo.distance * 1000)}m`
+                                  : `${scanResult.geo.distance.toFixed(1)}km`}
+                                {' / '}
+                                {scanResult.geo.max_distance < 1
+                                  ? `${Math.round(scanResult.geo.max_distance * 1000)}m`
+                                  : `${scanResult.geo.max_distance.toFixed(1)}km`}
+                                {' threshold'}
+                              </p>
+                              <p
+                                className={`text-xs ${
+                                  scanResult.geo.within_threshold
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}
+                              >
+                                {scanResult.geo.within_threshold
+                                  ? 'Within allowed range'
+                                  : 'Outside allowed range'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Price Display */}
+                        {scanResult.ticket.price != null && scanResult.ticket.currency && (
+                          <Separator />
+                        )}
+
+                        {scanResult.ticket.price != null && scanResult.ticket.currency && (
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">Price</p>
+                            <p className="text-sm font-semibold">
+                              {scanResult.ticket.price.toLocaleString()} {scanResult.ticket.currency}
+                            </p>
+                          </div>
+                        )}
+
                         {scanResult.ticket.holderEmail && (
                           <div className="space-y-1">
                             <p className="text-xs text-muted-foreground">Email</p>
                             <p className="text-sm">{scanResult.ticket.holderEmail}</p>
+                          </div>
+                        )}
+
+                        {scanResult.ticket.holderPhone && (
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Phone</p>
+                            <p className="text-sm">{scanResult.ticket.holderPhone}</p>
                           </div>
                         )}
 
@@ -490,8 +1063,28 @@ export default function ScannerPage() {
 
                         {scanResult.ticket.event.location && (
                           <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground">Location</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <MapPin className="h-3 w-3" /> Location
+                            </p>
                             <p className="text-sm">{scanResult.ticket.event.location}</p>
+                          </div>
+                        )}
+
+                        {scanResult.ticket.event.startDate && (
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" /> Event Date
+                            </p>
+                            <p className="text-sm">
+                              {new Date(scanResult.ticket.event.startDate).toLocaleDateString(undefined, {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -503,14 +1096,29 @@ export default function ScannerPage() {
           </AnimatePresence>
         </div>
 
+        {/* ============================================================ */}
         {/* Right: Scan History */}
+        {/* ============================================================ */}
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Recent Scans
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Recent Scans
+                </CardTitle>
+                {syncQueueCount > 0 && isOnline && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={handleManualSync}
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Sync {syncQueueCount}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {historyLoading ? (
@@ -615,15 +1223,15 @@ export default function ScannerPage() {
               <Card className="p-3">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-amber-500">
-                    {scanHistory.data.filter((s) => s.result === 'already_used').length}
+                    {scanHistory.data.filter((s) => s.result === 'already_used' || s.result === 'expired').length}
                   </p>
-                  <p className="text-xs text-muted-foreground">Used</p>
+                  <p className="text-xs text-muted-foreground">Used / Exp</p>
                 </div>
               </Card>
               <Card className="p-3">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-red-500">
-                    {scanHistory.data.filter((s) => s.result === 'invalid' || s.result === 'expired').length}
+                    {scanHistory.data.filter((s) => s.result === 'invalid').length}
                   </p>
                   <p className="text-xs text-muted-foreground">Invalid</p>
                 </div>

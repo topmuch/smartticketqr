@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, generateTicketCode } from '@/lib/auth';
 import { corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
+import { getOrgSecret } from '@/lib/ticket-generator';
 
 /**
  * Seed demo data for a default organization.
@@ -110,6 +111,10 @@ export async function POST(request: NextRequest) {
     });
 
     const orgId = org.id;
+
+    // Ensure HMAC secret for QR signing (Phase 3)
+    await getOrgSecret(orgId);
+
     const hashedPassword = await hashPassword('Admin@123');
 
     // Create users

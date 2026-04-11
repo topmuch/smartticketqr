@@ -54,10 +54,13 @@ import {
   DollarSign,
   AlertTriangle,
   X,
+  MessageCircle,
+  ClipboardCopy,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
+import { buildWhatsAppLink, generateTicketTextMessage } from '@/lib/whatsapp-service';
 
 // ==================== Types ====================
 
@@ -667,6 +670,45 @@ export default function TicketsPage() {
     }
   }, [ticketDetail, qrOpen]);
 
+  // WhatsApp send handler
+  const handleSendWhatsApp = useCallback(() => {
+    if (!selectedDetail || !selectedTicket) return;
+    const t = selectedDetail;
+    const org = useOrgStore.getState().currentOrganization;
+    const orgSlug = org?.slug || 'demo';
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const publicUrl = `${baseUrl}/ticket?code=${t.ticketCode}&org=${orgSlug}`;
+
+    if (t.holderPhone) {
+      const waResult = buildWhatsAppLink({
+        phone: t.holderPhone,
+        holderName: t.holderName,
+        eventName: t.event.name,
+        eventDate: t.event.startDate ? format(new Date(t.event.startDate), 'dd/MM/yyyy HH:mm') : 'TBA',
+        eventLocation: t.event.location || undefined,
+        ticketCode: t.ticketCode,
+        ticketType: t.ticketType,
+        publicUrl,
+        orgName: org?.name,
+      });
+      window.open(waResult.url, '_blank');
+      toast.success('WhatsApp message opened', { description: `Sending ticket to ${t.holderPhone}` });
+    } else {
+      // No phone - copy message to clipboard
+      const msg = generateTicketTextMessage({
+        holderName: t.holderName,
+        eventName: t.event.name,
+        eventDate: t.event.startDate ? format(new Date(t.event.startDate), 'dd/MM/yyyy HH:mm') : 'TBA',
+        ticketCode: t.ticketCode,
+        ticketType: t.ticketType,
+        publicUrl,
+        orgName: org?.name,
+      });
+      navigator.clipboard.writeText(msg);
+      toast.success('Ticket message copied to clipboard', { description: 'No phone number on file for WhatsApp' });
+    }
+  }, [selectedDetail, selectedTicket]);
+
   // Reset filters
   const handleResetFilters = useCallback(() => {
     setSearch('');
@@ -974,6 +1016,17 @@ export default function TicketsPage() {
                           >
                             <Download className="h-4 w-4" />
                           </Button>
+                          {ticket.holderPhone && ticket.status === 'active' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                              title="Send via WhatsApp"
+                              onClick={() => { setSelectedTicket(ticket); setQrOpen(true); }}
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1459,6 +1512,14 @@ export default function TicketsPage() {
             >
               <Download className="h-4 w-4" />
               Download PDF Ticket
+            </Button>
+            <Button
+              onClick={handleSendWhatsApp}
+              disabled={!selectedDetail}
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
             </Button>
           </DialogFooter>
         </DialogContent>
