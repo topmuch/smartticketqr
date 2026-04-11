@@ -96,9 +96,14 @@ model Organization {
   offlineQueue  OfflineScanQueue[]
   statsCache    OrgStatsCache?
   auditLogs     AuditLog[]
-  apiKeys       ApiKey[]
-  webhookEndpoints WebhookEndpoint[]
-  webhookLogs    WebhookLog[]
+  apiKeys           ApiKey[]
+  webhookEndpoints  WebhookEndpoint[]
+  webhookLogs       WebhookLog[]
+  customDomains     CustomDomain[]
+  automationRules   AutomationRule[]
+  supportTickets    SupportTicket[]
+  affiliates        Affiliate[]
+  fraudAlerts       FraudAlert[]
 
   @@index([slug])
   @@index([subscriptionStatus])
@@ -126,7 +131,8 @@ model User {
   scans         Scan[]
   activityLogs  ActivityLog[]
   transactions  Transaction[]
-  auditLogs    AuditLog[]
+  auditLogs      AuditLog[]
+  supportTickets SupportTicket[]
 
   @@unique([email, organizationId])
   @@index([role])
@@ -476,5 +482,164 @@ model WebhookLog {
   @@index([status])
   @@index([status, nextRetryAt])
   @@index([eventType])
+  @@index([createdAt])
+}
+
+// ============================================================
+// 🌐 CUSTOM DOMAINS (white-label per-organization)
+// ============================================================
+model CustomDomain {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  domain         String   @unique                           // e.g. billetterie.maboite.sn
+  sslStatus      String   @default("pending")               // pending, active, failed
+  isActive       Boolean  @default(true)
+  faviconUrl     String?                                    // custom favicon
+  emailFrom      String?                                    // custom sender email
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([domain])
+  @@index([sslStatus])
+}
+
+// ============================================================
+// 🌍 TRANSLATIONS (i18n key-value store)
+// ============================================================
+model Translation {
+  id            String   @id @default(cuid())
+  langCode      String                                     // fr, en, wo, etc.
+  translationKey String                                   // dashboard.stats.revenue
+  text          String                                    // translated text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([langCode, translationKey])
+  @@index([langCode])
+  @@index([translationKey])
+}
+
+// ============================================================
+// ⚙️ AUTOMATION RULES (notification sequences per org)
+// ============================================================
+model AutomationRule {
+  id             String   @id @default(cuid())
+  organizationId String
+  triggerEvent   String                                    // ticket_created, ticket_reminder, scan_failed, ticket_validated
+  channel        String                                    // whatsapp, sms, email
+  templateId     String?                                   // template identifier
+  delayMinutes   Int      @default(0)                     // delay before sending
+  fallbackChannel String?                                  // fallback if primary fails: sms, email
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+  @@index([triggerEvent])
+}
+
+// ============================================================
+// 📨 AUTOMATION LOGS (delivery tracking per automation rule)
+// ============================================================
+model AutomationLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  ruleId         String
+  triggerEvent   String
+  channel        String
+  recipient      String                                    // phone/email
+  status         String   @default("pending")              // pending, sent, failed, skipped
+  errorMessage   String?
+  attempts       Int      @default(0)
+  createdAt      DateTime @default(now())
+  sentAt         DateTime?
+
+  @@index([organizationId])
+  @@index([ruleId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
+// 🎫 SUPPORT TICKETS (customer support per organization)
+// ============================================================
+model SupportTicket {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String?
+  subject        String
+  message        String                                     // initial message
+  priority       String    @default("medium")               // low, medium, high, critical
+  status         String    @default("open")                 // open, in_progress, resolved, closed
+  assignedTo     String?                                     // assigned user ID
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, priority])
+  @@index([userId])
+  @@index([assignedTo])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
+// 🤝 AFFILIATES (referral tracking per organization)
+// ============================================================
+model Affiliate {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  userId               String
+  code                 String   @unique                     // referral code
+  commissionRate       Float    @default(5.0)              // percentage
+  totalRevenueGenerated Float   @default(0)               // total commission-eligible revenue
+  totalCommissionEarned  Float   @default(0)              // total paid out
+  totalReferrals        Int     @default(0)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([code])
+  @@index([userId])
+  @@index([isActive])
+}
+
+// ============================================================
+// 🚨 FRAUD ALERTS (detected suspicious activities)
+// ============================================================
+model FraudAlert {
+  id             String   @id @default(cuid())
+  organizationId String
+  ticketId       String?
+  userId         String?
+  ruleType       String                                     // multi_scan_rapid, geo_inconsistent, suspicious_ip, device_mismatch
+  severity       String   @default("medium")               // low, medium, high, critical
+  details        String?                                    // JSON: { scans: [...], distances: [...], ip: "..." }
+  status         String   @default("flagged")              // flagged, reviewed, dismissed, blocked
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, ruleType])
+  @@index([severity])
+  @@index([status])
   @@index([createdAt])
 }
