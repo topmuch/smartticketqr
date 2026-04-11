@@ -1,0 +1,1254 @@
+openapi: 3.0.3
+
+info:
+  title: SmartTicketQR Public API
+  description: |
+    A comprehensive, multi-tenant ticket management platform API for creating,
+    distributing, and validating QR-based event tickets. Each API key is scoped
+    to a specific organization, providing full data isolation and access control.
+
+    ## Base URL
+    All endpoints are relative to `{APP_URL}`.
+
+    ## Authentication
+    Pass your organization's API key in the `X-API-Key` header for every
+    authenticated request. Keys are issued per-organization and inherit that
+    organization's data scope.
+
+    ## Rate Limiting
+    Every response includes rate-limit headers so your client can adaptively
+    throttle requests:
+    - `X-RateLimit-Remaining` — requests left in the current window.
+    - `X-RateLimit-Reset`    — UNIX timestamp when the window resets.
+
+    ## Pagination
+    List endpoints support `page` and `limit` query parameters. Responses
+    include a `meta` object with pagination metadata.
+
+    ## Response Envelope
+    Every JSON response follows a standard envelope:
+
+    ```json
+    {
+      "success": true,
+      "data": {},
+      "error": null,
+      "meta": { "page": 1, "limit": 20, "total": 42, "totalPages": 3 }
+    }
+    ```
+  version: "5.0.0"
+  contact:
+    name: SmartTicketQR Support
+    email: support@smartticketqr.com
+    url: https://smartticketqr.com/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: "{APP_URL}"
+    description: Base URL — replace `{APP_URL}` with your deployment URL (e.g. `https://api.smartticketqr.com`)
+    variables:
+      APP_URL:
+        default: https://api.smartticketqr.com
+        description: The base URL of the SmartTicketQR API instance
+
+tags:
+  - name: Health
+    description: System health-check and readiness probes
+  - name: Events
+    description: Create, list, and manage events
+  - name: Tickets
+    description: Issue, retrieve, and validate tickets
+  - name: Stats
+    description: Organization-level analytics and statistics
+
+security:
+  - apiKey: []
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Health
+  # ---------------------------------------------------------------------------
+  /api/v1/health:
+    get:
+      operationId: healthCheck
+      tags: [Health]
+      summary: Health check
+      description: |
+        Returns the service health and version information. This endpoint
+        requires **no authentication** and is suitable for load-balancer
+        readiness probes.
+
+        Example:
+        ```bash
+        curl -s https://api.smartticketqr.com/api/v1/health | jq .
+        ```
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                success: true
+                data:
+                  status: healthy
+                  version: "5.0.0"
+                  uptime: 86400
+                  timestamp: "2025-01-15T12:00:00Z"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ---------------------------------------------------------------------------
+  # Events
+  # ---------------------------------------------------------------------------
+  /api/v1/events:
+    get:
+      operationId: listEvents
+      tags: [Events]
+      summary: List events
+      description: |
+        Returns a paginated list of events belonging to the authenticated
+        organization. Supports filtering by `status`, `type`, and a free-text
+        `search` term.
+
+        Example:
+        ```bash
+        curl -s -H "X-API-Key: $API_KEY" \
+          "https://api.smartticketqr.com/api/v1/events?status=active&page=1&limit=10" | jq .
+        ```
+      parameters:
+        - $ref: "#/components/parameters/EventStatusFilter"
+        - $ref: "#/components/parameters/EventTypeFilter"
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of events
+          headers:
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Event"
+                      meta:
+                        $ref: "#/components/schemas/PaginationMeta"
+              example:
+                success: true
+                data:
+                  - id: "evt_9f8e7d6c5b4a"
+                    name: "Summer Music Festival 2025"
+                    type: "concert"
+                    status: "active"
+                    startDate: "2025-07-15T18:00:00Z"
+                    endDate: "2025-07-17T23:00:00Z"
+                    venue: "Central Park Arena"
+                    totalCapacity: 15000
+                    ticketsSold: 12340
+                    createdAt: "2025-01-10T09:00:00Z"
+                    updatedAt: "2025-01-14T16:30:00Z"
+                meta:
+                  page: 1
+                  limit: 10
+                  total: 24
+                  totalPages: 3
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ---------------------------------------------------------------------------
+  # Tickets
+  # ---------------------------------------------------------------------------
+  /api/v1/tickets:
+    get:
+      operationId: listTickets
+      tags: [Tickets]
+      summary: List tickets
+      description: |
+        Returns a paginated list of tickets for the authenticated organization.
+        Filter by `eventId`, `status`, or an exact `ticketCode`.
+
+        Example:
+        ```bash
+        curl -s -H "X-API-Key: $API_KEY" \
+          "https://api.smartticketqr.com/api/v1/tickets?eventId=evt_9f8e7d6c5b4a&status=active&page=1&limit=20" | jq .
+        ```
+      parameters:
+        - name: eventId
+          in: query
+          description: Filter tickets by event ID
+          required: false
+          schema:
+            type: string
+            example: evt_9f8e7d6c5b4a
+        - name: status
+          in: query
+          description: Filter tickets by status
+          required: false
+          schema:
+            $ref: "#/components/schemas/TicketStatus"
+        - name: ticketCode
+          in: query
+          description: Filter by exact ticket code
+          required: false
+          schema:
+            type: string
+            example: TKT-ABC123
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of tickets
+          headers:
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Ticket"
+                      meta:
+                        $ref: "#/components/schemas/PaginationMeta"
+              example:
+                success: true
+                data:
+                  - id: "tkt_1a2b3c4d5e6f"
+                    code: "TKT-ABC123"
+                    eventId: "evt_9f8e7d6c5b4a"
+                    eventName: "Summer Music Festival 2025"
+                    holderName: "Jane Doe"
+                    holderEmail: "jane@example.com"
+                    holderPhone: "+14155550100"
+                    ticketType: "VIP"
+                    seatNumber: "A-12"
+                    status: "active"
+                    qrCodeUrl: "https://cdn.smartticketqr.com/qr/tkt_1a2b3c4d5e6f.png"
+                    validatedAt: null
+                    createdAt: "2025-01-12T10:30:00Z"
+                    updatedAt: "2025-01-12T10:30:00Z"
+                meta:
+                  page: 1
+                  limit: 20
+                  total: 1
+                  totalPages: 1
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      operationId: createTicket
+      tags: [Tickets]
+      summary: Create a ticket
+      description: |
+        Issues a new ticket for the specified event. A unique ticket code and
+        QR code are generated automatically.
+
+        Example:
+        ```bash
+        curl -s -X POST -H "X-API-Key: $API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"eventId":"evt_9f8e7d6c5b4a","holderName":"Jane Doe","holderEmail":"jane@example.com","ticketType":"VIP","seatNumber":"A-12"}' \
+          "https://api.smartticketqr.com/api/v1/tickets" | jq .
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+            example:
+              eventId: evt_9f8e7d6c5b4a
+              holderName: Jane Doe
+              holderEmail: jane@example.com
+              holderPhone: "+14155550100"
+              ticketType: VIP
+              seatNumber: A-12
+      responses:
+        "201":
+          description: Ticket created successfully
+          headers:
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Ticket"
+              example:
+                success: true
+                data:
+                  id: tkt_1a2b3c4d5e6f
+                  code: TKT-ABC123
+                  eventId: evt_9f8e7d6c5b4a
+                  eventName: Summer Music Festival 2025
+                  holderName: Jane Doe
+                  holderEmail: jane@example.com
+                  holderPhone: "+14155550100"
+                  ticketType: VIP
+                  seatNumber: A-12
+                  status: active
+                  qrCodeUrl: https://cdn.smartticketqr.com/qr/tkt_1a2b3c4d5e6f.png
+                  validatedAt: null
+                  createdAt: "2025-01-12T10:30:00Z"
+                  updatedAt: "2025-01-12T10:30:00Z"
+                error: null
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/tickets/{code}:
+    get:
+      operationId: getTicketByCode
+      tags: [Tickets]
+      summary: Get ticket details by code
+      description: |
+        Retrieves the full details of a single ticket using its unique ticket
+        code. The ticket must belong to an event within the authenticated
+        organization.
+
+        Example:
+        ```bash
+        curl -s -H "X-API-Key: $API_KEY" \
+          "https://api.smartticketqr.com/api/v1/tickets/TKT-ABC123" | jq .
+        ```
+      parameters:
+        - name: code
+          in: path
+          description: Unique ticket code
+          required: true
+          schema:
+            type: string
+            example: TKT-ABC123
+      responses:
+        "200":
+          description: Ticket details
+          headers:
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Ticket"
+              example:
+                success: true
+                data:
+                  id: tkt_1a2b3c4d5e6f
+                  code: TKT-ABC123
+                  eventId: evt_9f8e7d6c5b4a
+                  eventName: Summer Music Festival 2025
+                  holderName: Jane Doe
+                  holderEmail: jane@example.com
+                  holderPhone: "+14155550100"
+                  ticketType: VIP
+                  seatNumber: A-12
+                  status: active
+                  qrCodeUrl: https://cdn.smartticketqr.com/qr/tkt_1a2b3c4d5e6f.png
+                  validatedAt: null
+                  createdAt: "2025-01-12T10:30:00Z"
+                  updatedAt: "2025-01-12T10:30:00Z"
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      operationId: validateTicket
+      tags: [Tickets]
+      summary: Validate a ticket
+      description: |
+        Marks a ticket as validated (used). This is the endpoint called by
+        scanning hardware or gate-operator apps when a guest presents their
+        QR code at entry.
+
+        Optional fields allow recording the operator's identity, device info,
+        and geolocation for audit purposes.
+
+        Example:
+        ```bash
+        curl -s -X POST -H "X-API-Key: $API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"operatorInfo":"Gate A — Staff #42","latitude":40.7128,"longitude":-74.006,"deviceInfo":"Scanner-001"}' \
+          "https://api.smartticketqr.com/api/v1/tickets/TKT-ABC123" | jq .
+        ```
+      parameters:
+        - name: code
+          in: path
+          description: Unique ticket code to validate
+          required: true
+          schema:
+            type: string
+            example: TKT-ABC123
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateTicketRequest"
+            example:
+              operatorInfo: "Gate A — Staff #42"
+              latitude: 40.7128
+              longitude: -74.006
+              deviceInfo: Scanner-001
+      responses:
+        "200":
+          description: Ticket validated successfully
+          headers:
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TicketValidation"
+              example:
+                success: true
+                data:
+                  code: TKT-ABC123
+                  status: validated
+                  eventName: Summer Music Festival 2025
+                  holderName: Jane Doe
+                  ticketType: VIP
+                  seatNumber: A-12
+                  validatedAt: "2025-07-15T18:32:10Z"
+                  operatorInfo: "Gate A — Staff #42"
+                  latitude: 40.7128
+                  longitude: -74.006
+                  deviceInfo: Scanner-001
+                error: null
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ---------------------------------------------------------------------------
+  # Stats
+  # ---------------------------------------------------------------------------
+  /api/v1/stats:
+    get:
+      operationId: getOrganizationStats
+      tags: [Stats]
+      summary: Organization statistics
+      description: |
+        Returns aggregate statistics for the authenticated organization,
+        including total events, tickets issued, tickets validated, and
+        revenue figures.
+
+        Example:
+        ```bash
+        curl -s -H "X-API-Key: $API_KEY" \
+          "https://api.smartticketqr.com/api/v1/stats" | jq .
+        ```
+      responses:
+        "200":
+          description: Organization statistics
+          headers:
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OrganizationStats"
+              example:
+                success: true
+                data:
+                  organizationId: org_a1b2c3d4e5f6
+                  organizationName: Acme Events Inc.
+                  totalEvents: 24
+                  activeEvents: 8
+                  totalTicketsIssued: 58420
+                  totalTicketsValidated: 31205
+                  totalTicketsPending: 27215
+                  totalRevenue: 1742500.00
+                  currency: USD
+                  period:
+                    start: "2025-01-01T00:00:00Z"
+                    end: "2025-01-15T23:59:59Z"
+                  lastUpdated: "2025-01-15T12:00:00Z"
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+# ============================================================================ #
+# Components
+# ============================================================================ #
+components:
+
+  # ---------------------------------------------------------------------------
+  # Security Schemes
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Organization-scoped API key. All requests to authenticated endpoints
+        must include this header.
+
+  # ---------------------------------------------------------------------------
+  # Headers
+  # ---------------------------------------------------------------------------
+  headers:
+    X-RateLimit-Remaining:
+      description: Number of requests remaining in the current rate-limit window
+      schema:
+        type: integer
+        example: 97
+    X-RateLimit-Reset:
+      description: UNIX timestamp (seconds) when the rate-limit window resets
+      schema:
+        type: integer
+        format: int64
+        example: 1705312800
+
+  # ---------------------------------------------------------------------------
+  # Reusable Parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    EventStatusFilter:
+      name: status
+      in: query
+      description: Filter events by status
+      required: false
+      schema:
+        $ref: "#/components/schemas/EventStatus"
+    EventTypeFilter:
+      name: type
+      in: query
+      description: Filter events by type
+      required: false
+      schema:
+        $ref: "#/components/schemas/EventType"
+    SearchQuery:
+      name: search
+      in: query
+      description: Free-text search across event names and descriptions
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        example: music festival
+    Page:
+      name: page
+      in: query
+      description: Page number (1-indexed)
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+    Limit:
+      name: limit
+      in: query
+      description: Number of items per page
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+
+  # ---------------------------------------------------------------------------
+  # Response Envelopes
+  # ---------------------------------------------------------------------------
+  responses:
+    BadRequest:
+      description: The request body or query parameters are invalid
+      headers:
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/X-RateLimit-Remaining"
+        X-RateLimit-Reset:
+          $ref: "#/components/headers/X-RateLimit-Reset"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            data: null
+            error: "Validation failed: 'holderEmail' must be a valid email address"
+
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            data: null
+            error: "Authentication required. Please provide a valid X-API-Key header."
+
+    Forbidden:
+      description: The API key does not have permission to access this resource
+      headers:
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/X-RateLimit-Remaining"
+        X-RateLimit-Reset:
+          $ref: "#/components/headers/X-RateLimit-Reset"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            data: null
+            error: "Insufficient permissions to access the requested resource."
+
+    NotFound:
+      description: The requested resource was not found
+      headers:
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/X-RateLimit-Remaining"
+        X-RateLimit-Reset:
+          $ref: "#/components/headers/X-RateLimit-Reset"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            data: null
+            error: "Ticket with code 'TKT-NOTFOUND' not found."
+
+    Conflict:
+      description: The request conflicts with the current state of the resource
+      headers:
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/X-RateLimit-Remaining"
+        X-RateLimit-Reset:
+          $ref: "#/components/headers/X-RateLimit-Reset"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            data: null
+            error: "Ticket 'TKT-ABC123' has already been validated."
+
+    RateLimited:
+      description: Too many requests — slow down and retry after the reset time
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            data: null
+            error: "Rate limit exceeded. Retry after 1705312800."
+
+    InternalServerError:
+      description: An unexpected server error occurred
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            data: null
+            error: "An internal server error occurred. Please try again later."
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+
+    # -- Envelopes ----------------------------------------------------------
+
+    SuccessEnvelope:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          description: Indicates the request was processed successfully
+          example: true
+        data:
+          description: Response payload (type varies by endpoint)
+        error:
+          type: string
+          nullable: true
+          description: Error message, present only on failure
+          example: null
+
+    ErrorEnvelope:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for error responses
+          example: false
+        data:
+          description: Always `null` for error responses
+          nullable: true
+          example: null
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Resource not found"
+
+    PaginationMeta:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          description: Current page number (1-indexed)
+          example: 1
+        limit:
+          type: integer
+          description: Number of items per page
+          example: 20
+        total:
+          type: integer
+          description: Total number of items across all pages
+          example: 142
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 8
+
+    # -- Enums --------------------------------------------------------------
+
+    EventStatus:
+      type: string
+      enum: [draft, active, completed, cancelled, archived]
+      description: |
+        - `draft`     — Event is being prepared and is not yet public
+        - `active`    — Event is live and accepting ticketing
+        - `completed` — Event has ended
+        - `cancelled` — Event was cancelled
+        - `archived`  — Event has been archived
+
+    EventType:
+      type: string
+      enum: [concert, conference, sports, theater, festival, workshop, meetup, exhibition, other]
+      description: Category of the event
+
+    TicketStatus:
+      type: string
+      enum: [active, validated, cancelled, expired, refunded]
+      description: |
+        - `active`    — Ticket is valid and has not been used
+        - `validated` — Ticket has been scanned / used at entry
+        - `cancelled` — Ticket was cancelled by the organizer
+        - `expired`   — Ticket has passed its validity window
+        - `refunded`  — Ticket was refunded to the holder
+
+    # -- Health -------------------------------------------------------------
+
+    HealthResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - status
+            - version
+            - uptime
+            - timestamp
+          properties:
+            status:
+              type: string
+              enum: [healthy, degraded, unhealthy]
+              example: healthy
+            version:
+              type: string
+              description: Semantic version of the API service
+              example: "5.0.0"
+            uptime:
+              type: integer
+              description: Service uptime in seconds
+              example: 86400
+            timestamp:
+              type: string
+              format: date-time
+              example: "2025-01-15T12:00:00Z"
+
+    # -- Event --------------------------------------------------------------
+
+    Event:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - status
+        - startDate
+        - endDate
+        - totalCapacity
+        - ticketsSold
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: Unique event identifier
+          example: evt_9f8e7d6c5b4a
+        name:
+          type: string
+          description: Human-readable event name
+          example: Summer Music Festival 2025
+        description:
+          type: string
+          description: Event description
+          nullable: true
+          example: "A three-day outdoor music festival featuring top artists."
+        type:
+          $ref: "#/components/schemas/EventType"
+        status:
+          $ref: "#/components/schemas/EventStatus"
+        startDate:
+          type: string
+          format: date-time
+          description: Event start date/time (ISO 8601)
+          example: "2025-07-15T18:00:00Z"
+        endDate:
+          type: string
+          format: date-time
+          description: Event end date/time (ISO 8601)
+          example: "2025-07-17T23:00:00Z"
+        venue:
+          type: string
+          description: Venue name or address
+          nullable: true
+          example: Central Park Arena
+        location:
+          type: object
+          description: Geographic coordinates of the venue
+          nullable: true
+          properties:
+            latitude:
+              type: number
+              format: double
+              example: 40.7829
+            longitude:
+              type: number
+              format: double
+              example: -73.9654
+        totalCapacity:
+          type: integer
+          description: Maximum number of tickets that can be sold
+          example: 15000
+        ticketsSold:
+          type: integer
+          description: Number of tickets currently sold
+          example: 12340
+        imageUrl:
+          type: string
+          format: uri
+          description: URL to the event banner image
+          nullable: true
+          example: https://cdn.smartticketqr.com/events/evt_9f8e7d6c5b4a/banner.jpg
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-10T09:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-14T16:30:00Z"
+
+    # -- Ticket -------------------------------------------------------------
+
+    Ticket:
+      type: object
+      required:
+        - id
+        - code
+        - eventId
+        - eventName
+        - holderName
+        - holderEmail
+        - status
+        - qrCodeUrl
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: Unique ticket identifier (internal)
+          example: tkt_1a2b3c4d5e6f
+        code:
+          type: string
+          description: Human-readable unique ticket code (used in QR scans)
+          example: TKT-ABC123
+        eventId:
+          type: string
+          description: ID of the associated event
+          example: evt_9f8e7d6c5b4a
+        eventName:
+          type: string
+          description: Denormalized event name for convenience
+          example: Summer Music Festival 2025
+        holderName:
+          type: string
+          description: Full name of the ticket holder
+          example: Jane Doe
+        holderEmail:
+          type: string
+          format: email
+          description: Email address of the ticket holder
+          example: jane@example.com
+        holderPhone:
+          type: string
+          description: Phone number of the ticket holder
+          nullable: true
+          example: "+14155550100"
+        ticketType:
+          type: string
+          description: Tier or category of the ticket
+          nullable: true
+          example: VIP
+        seatNumber:
+          type: string
+          description: Assigned seat number (if applicable)
+          nullable: true
+          example: A-12
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        qrCodeUrl:
+          type: string
+          format: uri
+          description: URL to the pre-rendered QR code image
+          example: https://cdn.smartticketqr.com/qr/tkt_1a2b3c4d5e6f.png
+        validatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the ticket was validated
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-12T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-12T10:30:00Z"
+
+    # -- Request Bodies ------------------------------------------------------
+
+    CreateTicketRequest:
+      type: object
+      required:
+        - eventId
+        - holderName
+        - holderEmail
+      properties:
+        eventId:
+          type: string
+          description: ID of the event for which the ticket is being issued
+          example: evt_9f8e7d6c5b4a
+        holderName:
+          type: string
+          description: Full name of the ticket holder
+          minLength: 1
+          maxLength: 255
+          example: Jane Doe
+        holderEmail:
+          type: string
+          format: email
+          description: Email address of the ticket holder
+          example: jane@example.com
+        holderPhone:
+          type: string
+          description: Phone number of the ticket holder (optional)
+          maxLength: 30
+          nullable: true
+          example: "+14155550100"
+        ticketType:
+          type: string
+          description: Ticket tier or category (optional, defaults to event default)
+          maxLength: 100
+          nullable: true
+          example: VIP
+        seatNumber:
+          type: string
+          description: Assigned seat number (optional)
+          maxLength: 50
+          nullable: true
+          example: A-12
+
+    ValidateTicketRequest:
+      type: object
+      description: Optional metadata recorded at the time of validation
+      properties:
+        operatorInfo:
+          type: string
+          description: Free-text identification of the operator or gate
+          maxLength: 255
+          nullable: true
+          example: "Gate A — Staff #42"
+        latitude:
+          type: number
+          format: double
+          description: Latitude of the scanning device
+          minimum: -90
+          maximum: 90
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          description: Longitude of the scanning device
+          minimum: -180
+          maximum: 180
+          nullable: true
+          example: -74.006
+        deviceInfo:
+          type: string
+          description: Identifier of the scanning hardware or app
+          maxLength: 255
+          nullable: true
+          example: Scanner-001
+
+    # -- Ticket Validation Result -------------------------------------------
+
+    TicketValidation:
+      type: object
+      required:
+        - code
+        - status
+        - eventName
+        - holderName
+        - validatedAt
+      properties:
+        code:
+          type: string
+          description: The ticket code that was validated
+          example: TKT-ABC123
+        status:
+          type: string
+          description: Result of the validation
+          enum: [validated, already_validated, invalid, expired, cancelled]
+          example: validated
+        eventName:
+          type: string
+          description: Name of the event the ticket belongs to
+          example: Summer Music Festival 2025
+        holderName:
+          type: string
+          description: Name of the ticket holder
+          example: Jane Doe
+        ticketType:
+          type: string
+          description: Ticket tier or category
+          nullable: true
+          example: VIP
+        seatNumber:
+          type: string
+          description: Assigned seat number
+          nullable: true
+          example: A-12
+        validatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when validation occurred
+          example: "2025-07-15T18:32:10Z"
+        operatorInfo:
+          type: string
+          description: Operator who performed the validation
+          nullable: true
+          example: "Gate A — Staff #42"
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.006
+        deviceInfo:
+          type: string
+          description: Scanning device identifier
+          nullable: true
+          example: Scanner-001
+
+    # -- Stats --------------------------------------------------------------
+
+    OrganizationStats:
+      type: object
+      required:
+        - organizationId
+        - organizationName
+        - totalEvents
+        - activeEvents
+        - totalTicketsIssued
+        - totalTicketsValidated
+        - totalTicketsPending
+        - totalRevenue
+        - currency
+        - period
+        - lastUpdated
+      properties:
+        organizationId:
+          type: string
+          description: Unique organization identifier
+          example: org_a1b2c3d4e5f6
+        organizationName:
+          type: string
+          description: Display name of the organization
+          example: Acme Events Inc.
+        totalEvents:
+          type: integer
+          description: Total number of events (all statuses)
+          example: 24
+        activeEvents:
+          type: integer
+          description: Number of currently active events
+          example: 8
+        totalTicketsIssued:
+          type: integer
+          description: Total tickets issued across all events
+          example: 58420
+        totalTicketsValidated:
+          type: integer
+          description: Total tickets that have been validated (scanned)
+          example: 31205
+        totalTicketsPending:
+          type: integer
+          description: Tickets issued but not yet validated
+          example: 27215
+        totalRevenue:
+          type: number
+          format: double
+          description: Total revenue in the organization's currency
+          example: 1742500.00
+        currency:
+          type: string
+          description: ISO 4217 currency code
+          example: USD
+        period:
+          type: object
+          description: The time window covered by these statistics
+          required:
+            - start
+            - end
+          properties:
+            start:
+              type: string
+              format: date-time
+              example: "2025-01-01T00:00:00Z"
+            end:
+              type: string
+              format: date-time
+              example: "2025-01-15T23:59:59Z"
+        lastUpdated:
+          type: string
+          format: date-time
+          description: Timestamp when these stats were last recalculated
+          example: "2025-01-15T12:00:00Z"

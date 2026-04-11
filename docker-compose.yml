@@ -1,0 +1,145 @@
+# =============================================================================
+# SmartTicketQR — Docker Compose Production Configuration
+# =============================================================================
+# Multi-service setup:
+#   - app:   Next.js 16 application (Bun runtime, SQLite via Prisma)
+#   - caddy: Reverse proxy with automatic HTTPS via Let's Encrypt
+#
+# Usage:
+#   cp .env.example .env        # then edit .env with your values
+#   docker compose up -d        # start all services
+#   docker compose logs -f      # tail logs
+#   docker compose down          # stop all services
+#
+# For first-time deployment with a fresh database:
+#   docker compose run --rm app bunx prisma db push
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Application Service (SmartTicketQR)
+  # ---------------------------------------------------------------------------
+  # Next.js 16 running on Bun with SQLite. The standalone build output
+  # produces a minimal server that handles SSR, API routes, and static files.
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartticketqr-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # SQLite database path inside the persistent volume
+      - DATABASE_URL=file:/app/db/custom.db
+      # Override NODE_ENV to ensure production mode
+      - NODE_ENV=production
+      # Bind to all interfaces inside the container so Caddy can reach it
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+    volumes:
+      # -----------------------------------------------------------------------
+      # Persistent SQLite database storage
+      # Maps ./db/ on the host to /app/db/ inside the container.
+      # This ensures the database survives container rebuilds and restarts.
+      # Create the directory first: mkdir -p db
+      # -----------------------------------------------------------------------
+      - ./db:/app/db
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # Caddy Reverse Proxy (HTTPS Termination)
+  # ---------------------------------------------------------------------------
+  # Provides automatic SSL/TLS certificates via Let's Encrypt.
+  # Handles WebSocket upgrades for real-time features, Gzip compression,
+  # and security headers (configured in Caddyfile).
+  #
+  # To enable automatic HTTPS, edit the Caddyfile and replace the
+  # placeholder domain with your actual domain name.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: smartticketqr-caddy
+    restart: unless-stopped
+    ports:
+      # HTTP — redirects to HTTPS in production (or serves directly in dev)
+      - "80:80"
+      # HTTPS — automatic TLS via Let's Encrypt
+      - "443:443"
+      # HTTP/3 (QUIC) — experimental, optional
+      - "443:443/udp"
+    volumes:
+      # Mount the Caddy configuration file
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persistent storage for TLS certificates and Caddy config
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - internal
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+        reservations:
+          memory: 32M
+          cpus: "0.1"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+# =============================================================================
+# Networks
+# =============================================================================
+# Internal bridge network — the app and Caddy communicate over this.
+# No ports are exposed externally on this network; only Caddy has public ports.
+# =============================================================================
+networks:
+  internal:
+    driver: bridge
+    internal: false
+
+# =============================================================================
+# Persistent Volumes
+# =============================================================================
+# Named volumes ensure data survives container restarts and rebuilds.
+# caddy-data:  Stores Let's Encrypt certificates (critical for HTTPS)
+# caddy-config: Stores Caddy's internal configuration state
+# =============================================================================
+volumes:
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local

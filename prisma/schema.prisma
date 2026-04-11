@@ -96,6 +96,9 @@ model Organization {
   offlineQueue  OfflineScanQueue[]
   statsCache    OrgStatsCache?
   auditLogs     AuditLog[]
+  apiKeys       ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  webhookLogs    WebhookLog[]
 
   @@index([slug])
   @@index([subscriptionStatus])
@@ -404,5 +407,74 @@ model AuditLog {
   @@index([userId])
   @@index([action])
   @@index([severity])
+  @@index([createdAt])
+}
+
+// ============================================================
+// 🔑 API KEYS (per-organization API access)
+// ============================================================
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  keyHash        String    @unique                         // SHA-256 hash of the raw key
+  keyPrefix      String                                    // First 8 chars for display
+  name           String                                    // e.g. "Mobile App", "Partner Integration"
+  permissions    String    @default("[\"read\"]")           // JSON: ["read","write"]
+  rateLimit      Int       @default(100)                   // Requests per hour
+  lastUsedAt     DateTime?
+  isActive       Boolean   @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+  @@index([keyPrefix])
+}
+
+// ============================================================
+// 🪝 WEBHOOK ENDPOINTS (outbound webhook configs per org)
+// ============================================================
+model WebhookEndpoint {
+  id             String   @id @default(cuid())
+  organizationId String
+  url            String                                   // HTTPS endpoint URL
+  events         String                                   // JSON: ["ticket.validated","subscription.expired"]
+  secret         String                                   // HMAC signing secret
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  logs           WebhookLog[]
+
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+}
+
+// ============================================================
+// 📨 WEBHOOK LOGS (delivery tracking + retry state)
+// ============================================================
+model WebhookLog {
+  id             String    @id @default(cuid())
+  organizationId String
+  endpointId     String
+  eventType      String                                    // ticket.created, ticket.validated, etc.
+  payload        String?                                   // JSON string
+  httpStatus     Int?
+  responseBody   String?
+  attempts       Int       @default(1)
+  nextRetryAt    DateTime?
+  status         String    @default("pending")              // pending, delivered, failed
+  createdAt      DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  endpoint       WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([endpointId])
+  @@index([status])
+  @@index([status, nextRetryAt])
+  @@index([eventType])
   @@index([createdAt])
 }

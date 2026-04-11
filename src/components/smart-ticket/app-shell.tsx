@@ -24,6 +24,8 @@ import {
   ClipboardList,
   BarChart3,
   ShieldCheck,
+  KeyRound,
+  Webhook,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -72,6 +74,8 @@ const navItems: NavItem[] = [
   { id: 'scan-logs', label: 'Scan Logs', icon: ClipboardList, roles: ['super_admin', 'admin'] },
   { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
   { id: 'audit-logs', label: 'Audit Logs', icon: ShieldCheck, roles: ['super_admin', 'admin'] },
+  { id: 'api-keys', label: 'API Keys', icon: KeyRound, roles: ['super_admin', 'admin'] },
+  { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['super_admin', 'admin'] },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 

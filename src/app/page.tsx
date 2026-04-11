@@ -18,6 +18,8 @@ import BillingPage from '@/components/smart-ticket/billing-page';
 import ScanLogsPage from '@/components/smart-ticket/scan-logs-page';
 import ReportsPage from '@/components/smart-ticket/reports-page';
 import AuditLogsPage from '@/components/smart-ticket/audit-logs-page';
+import ApiKeysPage from '@/components/smart-ticket/api-keys-page';
+import WebhooksPage from '@/components/smart-ticket/webhooks-page';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
   login: LoginPage,
@@ -34,6 +36,8 @@ const pageComponents: Record<PageName, React.ComponentType> = {
   'scan-logs': ScanLogsPage,
   reports: ReportsPage,
   'audit-logs': AuditLogsPage,
+  'api-keys': ApiKeysPage,
+  webhooks: WebhooksPage,
 };
 
 export default function Home() {

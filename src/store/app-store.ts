@@ -15,7 +15,9 @@ export type PageName =
   | 'billing'
   | 'scan-logs'
   | 'reports'
-  | 'audit-logs';
+  | 'audit-logs'
+  | 'api-keys'
+  | 'webhooks';
 
 interface AppState {
   currentPage: PageName;

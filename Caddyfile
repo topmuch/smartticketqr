@@ -1,23 +1,147 @@
-:81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
+# =============================================================================
+# SmartTicketQR — Caddy Reverse Proxy Configuration
+# =============================================================================
+# This file configures Caddy as a reverse proxy for the Next.js application.
+#
+# QUICK START (local development):
+#   The block below already listens on :80 and proxies to app:3000.
+#   No domain is required — it works out of the box with docker compose.
+#
+# PRODUCTION (automatic HTTPS):
+#   Replace the first line with your domain:
+#     yourdomain.com {
+#       ...
+#     }
+#   Caddy will automatically obtain and renew TLS certificates via Let's Encrypt.
+#
+# WEBSOCKET SUPPORT:
+#   WebSocket connections are automatically upgraded through the reverse proxy.
+# =============================================================================
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+# ---------------------------------------------------------------------------
+# Global Options
+# ---------------------------------------------------------------------------
+{
+    # Admin API — disabled in production for security
+    admin off
 
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+    # Log level
+    log {
+        level INFO
+        format json
+    }
 }
+
+# ---------------------------------------------------------------------------
+# HTTP → HTTPS Redirect + Reverse Proxy
+# ---------------------------------------------------------------------------
+# In production, replace ":80" with your domain (e.g., "smartticketqr.com").
+# Caddy will automatically provision a TLS certificate.
+# ---------------------------------------------------------------------------
+:80 {
+    # -----------------------------------------------------------------------
+    # Security Headers
+    # -----------------------------------------------------------------------
+    # These headers are added to every response for defense-in-depth.
+    header {
+        # Prevent MIME type sniffing (forces browser to respect Content-Type)
+        X-Content-Type-Options "nosniff"
+
+        # Prevent clickjacking — only allow same-origin framing
+        X-Frame-Options "SAMEORIGIN"
+
+        # Enable browser XSS protection (legacy, still useful for older browsers)
+        X-XSS-Protection "1; mode=block"
+
+        # Referrer policy — send origin only on cross-origin requests
+        Referrer-Policy "strict-origin-when-cross-origin"
+
+        # Permissions policy — disable unnecessary browser features
+        Permissions-Policy "camera=(), microphone=(), geolocation=(self)"
+
+        # Content Security Policy
+        # Allows scripts/styles from self, inline, and common CDNs.
+        # Adjust img-src and connect-src as needed for your integrations.
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+
+        # HSTS — enforce HTTPS for 1 year, include subdomains
+        # Uncomment the line below when HTTPS is active (after setting a domain)
+        # Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    }
+
+    # -----------------------------------------------------------------------
+    # Gzip Compression
+    # -----------------------------------------------------------------------
+    # Compress text-based responses to reduce bandwidth and improve load times.
+    encode gzip zstd
+
+    # -----------------------------------------------------------------------
+    # Reverse Proxy — Next.js Application
+    # -----------------------------------------------------------------------
+    # Proxies all requests to the app service on the internal Docker network.
+    # WebSocket connections are automatically upgraded.
+    reverse_proxy app:3000 {
+        # Pass original host and client information to the app
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+
+        # Transparent mode — pass through all hop-by-hop headers
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+            dial_timeout 30s
+        }
+    }
+
+    # -----------------------------------------------------------------------
+    # Health Check Endpoint
+    # -----------------------------------------------------------------------
+    # Caddy will periodically check this to confirm the upstream is alive.
+    # This is used by Docker's healthcheck in compose.
+    handle /api/v1/health {
+        reverse_proxy app:3000
+    }
+
+    # -----------------------------------------------------------------------
+    # Static Files — Cache aggressively
+    # -----------------------------------------------------------------------
+    # Static assets (_next/static, images, fonts) are immutable and can be
+    # cached by the browser and CDNs for extended periods.
+    handle /_next/static/* {
+        reverse_proxy app:3000
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    # Favicon and robots.txt — short cache
+    handle /favicon.ico
+    handle /robots.txt {
+        reverse_proxy app:3000
+        header Cache-Control "public, max-age=86400"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Production HTTPS Block (uncomment and configure when ready)
+# ---------------------------------------------------------------------------
+# Replace "yourdomain.com" with your actual domain.
+# Caddy handles certificate provisioning and renewal automatically.
+#
+# yourdomain.com {
+#     import security_headers
+#
+#     encode gzip zstd
+#
+#     reverse_proxy app:3000 {
+#         header_up Host {host}
+#         header_up X-Real-IP {remote_host}
+#         header_up X-Forwarded-For {remote_host}
+#         header_up X-Forwarded-Proto {scheme}
+#     }
+# }
+#
+# www.yourdomain.com {
+#     redir https://yourdomain.com{uri} permanent
+# }
