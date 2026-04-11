@@ -54,3 +54,30 @@ Stage Summary:
   - docs/openapi.yaml (40KB, comprehensive OpenAPI 3.0 spec)
   - DEPLOYMENT_SECURITY_GUIDE.md (53KB, full production guide)
   - scripts/backup-db.sh, scripts/webhook-cron.sh
+
+---
+Task ID: 3
+Agent: API Routes Agent
+Task: Create all Phase 6 API routes
+
+Work Log:
+- Created custom-domains CRUD routes (GET list, POST create with domain validation, GET/PUT/DELETE by id)
+- Created automation-rules CRUD routes (GET list with filters, POST create with trigger/channel validation, GET/PUT/DELETE by id)
+- Created automation-logs route (GET list with status/channel/date-range filters)
+- Created support-tickets CRUD routes (GET list with filters, POST create, GET/PUT/DELETE by id with resolvedAt auto-set)
+- Created affiliates CRUD routes (GET list, POST create with auto-generated referral code, GET/PUT/DELETE by id)
+- Created affiliates/stats route (aggregate stats + top performers)
+- Created fraud-alerts CRUD routes (GET list with filters, POST create, GET/PUT by id with auto-reviewedAt)
+- Created fraud-alerts/stats route (counts by status/severity/ruleType + time period)
+- Created i18n route (GET all translations for a language, French fallback)
+- Created i18n/[key] route (GET single translation, PUT upsert with admin role)
+- All 15 files pass ESLint with 0 errors
+
+Stage Summary:
+- 15 API route files created
+- All tenant-isolated with resolveTenant() for IDOR protection
+- Full CRUD on all Phase 6 resources (CustomDomain, AutomationRule, AutomationLog, SupportTicket, Affiliate, FraudAlert, Translation)
+- Pagination support on list endpoints
+- Proper validation, error handling, and HTTP status codes
+- Activity logging on all mutations
+- Admin/super_admin role enforcement on destructive operations
