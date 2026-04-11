@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useSyncExternalStore } from 'react';
 import { translations, type Locale, AVAILABLE_LOCALES, LOCALE_NAMES } from './translations';
 
 interface I18nContextType {
@@ -20,27 +20,42 @@ function detectBrowserLocale(): Locale {
   return 'en';
 }
 
-function getStoredLocale(): Locale {
-  if (typeof localStorage === 'undefined') return 'fr';
+function getInitialLocale(): Locale {
+  if (typeof localStorage === 'undefined') return detectBrowserLocale();
   const stored = localStorage.getItem('smartticket-lang');
   if (stored && AVAILABLE_LOCALES.includes(stored as Locale)) return stored as Locale;
   return detectBrowserLocale();
 }
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('fr');
-  const [mounted, setMounted] = useState(false);
+// Simple external store for locale so we can use useSyncExternalStore
+let currentLocale: Locale | null = null;
+const localeListeners = new Set<() => void>();
 
-  useEffect(() => {
-    setLocaleState(getStoredLocale());
-    setMounted(true);
-  }, []);
+function subscribeLocale(callback: () => void) {
+  localeListeners.add(callback);
+  return () => localeListeners.delete(callback);
+}
+
+function getLocaleSnapshot(): Locale {
+  if (currentLocale === null) {
+    currentLocale = getInitialLocale();
+  }
+  return currentLocale;
+}
+
+function setLocaleSnapshot(newLocale: Locale) {
+  currentLocale = newLocale;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('smartticket-lang', newLocale);
+  }
+  localeListeners.forEach((listener) => listener());
+}
+
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot, () => 'fr' as Locale);
 
   const setLocale = useCallback((newLocale: Locale) => {
-    setLocaleState(newLocale);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('smartticket-lang', newLocale);
-    }
+    setLocaleSnapshot(newLocale);
   }, []);
 
   const t = useCallback(

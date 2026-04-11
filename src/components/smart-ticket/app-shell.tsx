@@ -51,6 +51,7 @@ import { useAppStore, type PageName } from '@/store/app-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore, type Organization } from '@/store/org-store';
 import SubscriptionBanner from '@/components/smart-ticket/subscription-banner';
+import { LanguageSwitcher } from '@/components/smart-ticket/language-switcher';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -375,6 +376,7 @@ function Header() {
 
       <div className="flex items-center gap-2">
         <OrgSwitcher />
+        <LanguageSwitcher />
 
         <Button variant="ghost" size="icon" className="h-9 w-9 relative">
           <Bell className="h-4 w-4" />
