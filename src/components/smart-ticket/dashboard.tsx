@@ -38,6 +38,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
+import { useOrgStore } from '@/store/org-store';
 import {
   Card,
   CardContent,
@@ -257,8 +258,12 @@ export default function Dashboard() {
     queryKey: ['analytics', dateRange],
     queryFn: async () => {
       const token = useAuthStore.getState().token;
+      const orgId = useOrgStore.getState().currentOrganization?.id;
       const res = await fetch(`/api/analytics?range=${dateRange}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
+        },
       });
       if (!res.ok) {
         throw new Error('Failed to fetch analytics');

@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 
 import { useAuthStore } from '@/store/auth-store';
+import { useOrgStore } from '@/store/org-store';
 
 // ==================== Types ====================
 
@@ -147,9 +148,11 @@ interface EventsResponse {
 
 function getAuthHeaders(): HeadersInit {
   const token = useAuthStore.getState().token;
+  const orgId = useOrgStore.getState().currentOrganization?.id;
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'X-Organization-Id': orgId || '',
   };
 }
 

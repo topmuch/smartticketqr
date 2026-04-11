@@ -13,6 +13,7 @@ import UsersPage from '@/components/smart-ticket/users-page';
 import TransactionsPage from '@/components/smart-ticket/transactions-page';
 import ActivityLogsPage from '@/components/smart-ticket/activity-logs-page';
 import SettingsPage from '@/components/smart-ticket/settings-page';
+import OrganizationsPage from '@/components/smart-ticket/organizations-page';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
   login: LoginPage,
@@ -24,6 +25,7 @@ const pageComponents: Record<PageName, React.ComponentType> = {
   transactions: TransactionsPage,
   'activity-logs': ActivityLogsPage,
   settings: SettingsPage,
+  organizations: OrganizationsPage,
 };
 
 export default function Home() {
@@ -35,7 +37,10 @@ export default function Home() {
     if (isAuthenticated && token) {
       // Check if token is still valid
       fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': useAuthStore.getState().user?.organizationId || '',
+        },
       })
         .then((res) => {
           if (!res.ok) {

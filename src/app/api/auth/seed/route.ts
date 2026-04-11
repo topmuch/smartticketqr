@@ -1,35 +1,64 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, generateTicketCode } from '@/lib/auth';
-import { corsResponse, withErrorHandler } from '@/lib/api-helper';
+import { corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
 
+/**
+ * Seed demo data for a default organization.
+ * Creates: 1 organization, 3 users, 6 events, ~300 tickets, scans, transactions, activity logs.
+ */
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    // Check if super_admin already exists
-    const existingAdmin = await db.user.findFirst({ where: { role: 'super_admin' } });
-    if (existingAdmin) {
-      return corsResponse({ message: 'Super admin already exists', user: { id: existingAdmin.id, email: existingAdmin.email, role: existingAdmin.role } });
+    // Check if demo organization already exists
+    const existingOrg = await db.organization.findFirst({ where: { slug: 'demo' } });
+    if (existingOrg) {
+      const userCount = await db.user.count({ where: { organizationId: existingOrg.id } });
+      const eventCount = await db.event.count({ where: { organizationId: existingOrg.id } });
+      if (userCount > 0) {
+        return corsResponse({
+          message: 'Demo data already exists',
+          organization: { id: existingOrg.id, name: existingOrg.name, slug: existingOrg.slug },
+          stats: { users: userCount, events: eventCount },
+        });
+      }
     }
 
+    // Create default organization
+    const org = await db.organization.create({
+      data: {
+        uuid: crypto.randomUUID(),
+        name: 'SmartTicketQR Demo',
+        slug: 'demo',
+        primaryColor: '#059669',
+        subscriptionPlan: 'enterprise',
+        subscriptionStatus: 'active',
+        maxEvents: 999,
+        maxTicketsPerEvent: 100000,
+        maxUsers: 999,
+      },
+    });
+
+    const orgId = org.id;
     const hashedPassword = await hashPassword('Admin@123');
 
-    // Create super admin
+    // Create users
     const superAdmin = await db.user.create({
       data: {
         name: 'Super Administrator',
         email: 'admin@smartticketqr.com',
         password: hashedPassword,
         role: 'super_admin',
+        organizationId: orgId,
       },
     });
 
-    // Create additional users
     const admin = await db.user.create({
       data: {
         name: 'John Manager',
         email: 'john@smartticketqr.com',
         password: hashedPassword,
         role: 'admin',
+        organizationId: orgId,
       },
     });
 
@@ -39,11 +68,12 @@ export async function POST(request: NextRequest) {
         email: 'sarah@smartticketqr.com',
         password: hashedPassword,
         role: 'operator',
+        organizationId: orgId,
       },
     });
 
     // Create events
-    const events = [
+    const eventsData = [
       {
         name: 'Summer Music Festival 2025',
         type: 'event',
@@ -58,6 +88,7 @@ export async function POST(request: NextRequest) {
         status: 'active',
         userId: superAdmin.id,
         image: '/images/music-festival.jpg',
+        organizationId: orgId,
       },
       {
         name: 'Tech Conference Senegal',
@@ -73,6 +104,7 @@ export async function POST(request: NextRequest) {
         status: 'active',
         userId: admin.id,
         image: '/images/tech-conference.jpg',
+        organizationId: orgId,
       },
       {
         name: 'Dakar → Saint-Louis Express',
@@ -88,6 +120,7 @@ export async function POST(request: NextRequest) {
         status: 'active',
         userId: admin.id,
         image: '/images/bus-express.jpg',
+        organizationId: orgId,
       },
       {
         name: 'Gorée Island Ferry',
@@ -103,6 +136,7 @@ export async function POST(request: NextRequest) {
         status: 'active',
         userId: operator.id,
         image: '/images/ferry-goree.jpg',
+        organizationId: orgId,
       },
       {
         name: 'Casamance River Cruise',
@@ -118,6 +152,7 @@ export async function POST(request: NextRequest) {
         status: 'active',
         userId: superAdmin.id,
         image: '/images/river-cruise.jpg',
+        organizationId: orgId,
       },
       {
         name: 'National Day Celebration',
@@ -133,13 +168,14 @@ export async function POST(request: NextRequest) {
         status: 'completed',
         userId: superAdmin.id,
         image: '/images/national-day.jpg',
+        organizationId: orgId,
       },
     ];
 
-    const createdEvents = await db.event.createMany({ data: events });
-    const allEvents = await db.event.findMany();
+    await db.event.createMany({ data: eventsData });
+    const allEvents = await db.event.findMany({ where: { organizationId: orgId } });
 
-    // Create tickets for each event
+    // Create tickets
     const ticketTypes = ['VIP', 'Standard', 'Standard', 'Standard', 'Economy'];
     const firstNames = ['Amadou', 'Fatou', 'Moussa', 'Aissatou', 'Ibrahima', 'Mariama', 'Ousmane', 'Kine', 'Mamadou', 'Adama', 'Cheikh', 'Djibril', 'Awa', 'Lamine', 'Sokhna', 'Boubacar', 'Ndeye', 'Pape', 'Coumba', 'Abdoulaye', 'Rama', 'Babacar', 'Thierno', 'Khady', 'Seydou', 'Oumou', 'Moustapha', 'Aminata', 'Idrissa', 'Bineta'];
     const lastNames = ['Diallo', 'Ndiaye', 'Ba', 'Fall', 'Sow', 'Diop', 'Sy', 'Mbaye', 'Kane', 'Gueye', 'Sarr', 'Dia', 'Cisse', 'Thiam', 'Dieng', 'Toure', 'Wane', 'Niang', 'Seck', 'Lo'];
@@ -152,7 +188,7 @@ export async function POST(request: NextRequest) {
       holderName: string;
       holderEmail: string;
       holderPhone: string;
-      seatNumber: string;
+      seatNumber: string | undefined;
       price: number;
       currency: string;
       status: string;
@@ -195,7 +231,9 @@ export async function POST(request: NextRequest) {
     }
 
     await db.ticket.createMany({ data: ticketsToCreate });
-    const allTickets = await db.ticket.findMany();
+    const allTickets = await db.ticket.findMany({
+      include: { event: { select: { id: true, organizationId: true } } },
+    });
 
     // Create scans for used tickets
     const scansToCreate = allTickets
@@ -204,6 +242,7 @@ export async function POST(request: NextRequest) {
         ticketId: ticket.id,
         eventId: ticket.eventId,
         scannedBy: operator.id,
+        organizationId: ticket.event.organizationId,
         result: 'valid' as const,
         deviceInfo: 'Mobile Scanner v2.1',
         location: 'Main Entrance',
@@ -219,6 +258,7 @@ export async function POST(request: NextRequest) {
         ticketId: t.id,
         eventId: t.eventId,
         scannedBy: operator.id,
+        organizationId: t.event.organizationId,
         result: 'already_used' as const,
         deviceInfo: 'Mobile Scanner v2.1',
         location: 'Gate B',
@@ -231,6 +271,7 @@ export async function POST(request: NextRequest) {
       eventId: ticket.eventId,
       ticketId: ticket.id,
       userId: ticket.userId,
+      organizationId: ticket.event.organizationId,
       amount: ticket.price,
       currency: ticket.currency,
       status: 'completed' as const,
@@ -243,22 +284,28 @@ export async function POST(request: NextRequest) {
 
     // Create activity logs
     const activityLogs = [
-      { userId: superAdmin.id, action: 'event.create', details: 'Created Summer Music Festival 2025' },
-      { userId: superAdmin.id, action: 'event.create', details: 'Created Casamance River Cruise' },
-      { userId: superAdmin.id, action: 'user.register', details: 'Super admin account created' },
-      { userId: admin.id, action: 'event.create', details: 'Created Tech Conference Senegal' },
-      { userId: admin.id, action: 'ticket.create', details: 'Bulk generated 50 tickets for Tech Conference' },
-      { userId: operator.id, action: 'scan.validate', details: 'Validated 15 tickets at Main Entrance' },
-      { userId: operator.id, action: 'scan.validate', details: 'Rejected 3 already-used tickets' },
-      { userId: superAdmin.id, action: 'system.seed', details: 'Database seeded with demo data' },
-      { userId: admin.id, action: 'report.export', details: 'Exported ticket report for Music Festival' },
-      { userId: operator.id, action: 'ticket.validate', details: 'Validated 20 tickets for ferry service' },
+      { userId: superAdmin.id, organizationId: orgId, action: 'event.create', details: 'Created Summer Music Festival 2025' },
+      { userId: superAdmin.id, organizationId: orgId, action: 'event.create', details: 'Created Casamance River Cruise' },
+      { userId: superAdmin.id, organizationId: orgId, action: 'user.register', details: 'Super admin account created' },
+      { userId: admin.id, organizationId: orgId, action: 'event.create', details: 'Created Tech Conference Senegal' },
+      { userId: admin.id, organizationId: orgId, action: 'ticket.create', details: 'Bulk generated 50 tickets for Tech Conference' },
+      { userId: operator.id, organizationId: orgId, action: 'scan.validate', details: 'Validated 15 tickets at Main Entrance' },
+      { userId: operator.id, organizationId: orgId, action: 'scan.validate', details: 'Rejected 3 already-used tickets' },
+      { userId: superAdmin.id, organizationId: orgId, action: 'system.seed', details: 'Database seeded with demo data' },
+      { userId: admin.id, organizationId: orgId, action: 'report.export', details: 'Exported ticket report for Music Festival' },
+      { userId: operator.id, organizationId: orgId, action: 'ticket.validate', details: 'Validated 20 tickets for ferry service' },
     ];
 
     await db.activityLog.createMany({ data: activityLogs });
 
     return corsResponse({
       message: 'Demo data seeded successfully',
+      organization: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        subscriptionPlan: org.subscriptionPlan,
+      },
       stats: {
         users: 3,
         events: allEvents.length,
@@ -271,6 +318,4 @@ export async function POST(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
-}
+export async function OPTIONS() { return handleCors(); }

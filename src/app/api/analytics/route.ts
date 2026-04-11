@@ -1,15 +1,19 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, corsResponse, withErrorHandler, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
 
+/**
+ * GET /api/analytics — Organization-scoped dashboard analytics.
+ * All queries are filtered by the tenant's organizationId.
+ */
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
-    // Run all queries in parallel
+    const orgId = tenant.organizationId;
+
+    // Run all queries in parallel, filtered by organizationId
     const [
       totalTickets,
       soldTickets,
@@ -23,31 +27,44 @@ export async function GET(request: NextRequest) {
       activeEvents,
       totalUsers,
     ] = await Promise.all([
-      // Total tickets
-      db.ticket.count(),
+      // Total tickets (via event organizationId)
+      db.ticket.count({
+        where: { event: { organizationId: orgId } },
+      }),
 
       // Sold tickets (non-cancelled)
-      db.ticket.count({ where: { status: { not: 'cancelled' } } }),
+      db.ticket.count({
+        where: {
+          event: { organizationId: orgId },
+          status: { not: 'cancelled' },
+        },
+      }),
 
       // Used tickets
-      db.ticket.count({ where: { status: 'used' } }),
+      db.ticket.count({
+        where: {
+          event: { organizationId: orgId },
+          status: 'used',
+        },
+      }),
 
-      // Total revenue
+      // Total revenue (transaction has direct organizationId)
       db.transaction.aggregate({
-        where: { status: 'completed' },
+        where: { status: 'completed', organizationId: orgId },
         _sum: { amount: true },
       }),
 
-      // Tickets by status
+      // Tickets by status (via event organizationId)
       db.ticket.groupBy({
         by: ['status'],
+        where: { event: { organizationId: orgId } },
         _count: true,
       }),
 
-      // Revenue by event
+      // Revenue by event (transaction has direct organizationId)
       db.transaction.groupBy({
         by: ['eventId'],
-        where: { status: 'completed' },
+        where: { status: 'completed', organizationId: orgId },
         _sum: { amount: true },
         having: { amount: { _sum: { gt: 0 } } },
       }),
@@ -55,6 +72,7 @@ export async function GET(request: NextRequest) {
       // Scans today
       db.scan.count({
         where: {
+          organizationId: orgId,
           createdAt: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
           },
@@ -64,6 +82,7 @@ export async function GET(request: NextRequest) {
       // Scans this week
       db.scan.count({
         where: {
+          organizationId: orgId,
           createdAt: {
             gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
           },
@@ -72,6 +91,7 @@ export async function GET(request: NextRequest) {
 
       // Recent activity (last 20)
       db.activityLog.findMany({
+        where: { organizationId: orgId },
         take: 20,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -80,14 +100,18 @@ export async function GET(request: NextRequest) {
       }),
 
       // Active events count
-      db.event.count({ where: { status: 'active' } }),
+      db.event.count({
+        where: { status: 'active', organizationId: orgId },
+      }),
 
       // Total users
-      db.user.count({ where: { isActive: true } }),
+      db.user.count({
+        where: { isActive: true, organizationId: orgId },
+      }),
     ]);
 
     // Fetch event names for revenue by event
-    const eventIds = revenueByEvent.map(r => r.eventId);
+    const eventIds = revenueByEvent.map(r => r.eventId).filter(Boolean);
     const events = eventIds.length > 0
       ? await db.event.findMany({
           where: { id: { in: eventIds } },
@@ -111,15 +135,15 @@ export async function GET(request: NextRequest) {
       return acc;
     }, {} as Record<string, number>);
 
-    // Daily scans for the last 7 days
+    // Daily scans for the last 7 days (raw SQL with organizationId filter)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const dailyScans = await db.$queryRawUnsafe<Array<{ date: string; count: bigint }>>(`
       SELECT DATE(createdAt) as date, COUNT(*) as count
       FROM "Scan"
-      WHERE createdAt >= ?
+      WHERE createdAt >= ? AND organizationId = ?
       GROUP BY DATE(createdAt)
       ORDER BY date ASC
-    `, sevenDaysAgo.toISOString());
+    `, sevenDaysAgo.toISOString(), orgId);
 
     return corsResponse({
       totalTickets,
@@ -141,6 +165,4 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

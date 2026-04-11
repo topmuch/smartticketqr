@@ -1,16 +1,14 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, corsResponse, withErrorHandler } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const fullUser = await db.user.findUnique({
-      where: { id: user.userId },
+      where: { id: tenant.userId },
       select: {
         id: true,
         email: true,
@@ -18,8 +16,21 @@ export async function GET(request: NextRequest) {
         role: true,
         avatar: true,
         isActive: true,
+        organizationId: true,
         createdAt: true,
         updatedAt: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            logoUrl: true,
+            primaryColor: true,
+            subscriptionPlan: true,
+            subscriptionStatus: true,
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -31,6 +42,4 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
-}
+export async function OPTIONS() { return handleCors(); }

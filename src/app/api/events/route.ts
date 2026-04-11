@@ -1,21 +1,24 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, requireRole, corsResponse, withErrorHandler, isErrorResponse, parsePagination, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith, checkSubscriptionLimit } from '@/lib/api-helper';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
     const { searchParams } = new URL(request.url);
     const { page, limit } = parsePagination(searchParams);
     const type = searchParams.get('type');
     const status = searchParams.get('status');
     const search = searchParams.get('search');
 
-    const where: Record<string, unknown> = {};
+    const where = tenantWhereWith(tenant.organizationId, {});
 
-    if (type) where.type = type;
-    if (status) where.status = status;
+    if (type) (where as Record<string, unknown>).type = type;
+    if (status) (where as Record<string, unknown>).status = status;
     if (search) {
-      where.OR = [
+      (where as Record<string, unknown>).OR = [
         { name: { contains: search } },
         { description: { contains: search } },
         { location: { contains: search } },
@@ -48,18 +51,27 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin', 'admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const body = await request.json();
     const { name, type, description, location, startDate, endDate, totalTickets, price, currency, status } = body;
 
     if (!name || !startDate || !endDate || price === undefined) {
       return corsResponse({ error: 'Name, startDate, endDate, and price are required' }, 400);
+    }
+
+    // Check plan event limit
+    const org = await db.organization.findUnique({ where: { id: tenant.organizationId } });
+    if (org) {
+      const currentEvents = await db.event.count({ where: { organizationId: tenant.organizationId } });
+      const limitCheck = checkSubscriptionLimit(org.subscriptionPlan, currentEvents, 'maxEvents');
+      if (!limitCheck.allowed) {
+        return corsResponse({ error: `Event limit (${limitCheck.limit}) reached for your plan` }, 403);
+      }
     }
 
     const event = await db.event.create({
@@ -74,7 +86,8 @@ export async function POST(request: NextRequest) {
         price: parseFloat(price),
         currency: currency || 'USD',
         status: status || 'active',
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
       },
       include: {
         _count: { select: { tickets: true } },
@@ -85,7 +98,8 @@ export async function POST(request: NextRequest) {
     // Log activity
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'event.create',
         details: `Created event: ${event.name}`,
       },
@@ -95,6 +109,4 @@ export async function POST(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

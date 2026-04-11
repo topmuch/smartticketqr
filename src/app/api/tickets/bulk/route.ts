@@ -1,14 +1,12 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, corsResponse, withErrorHandler, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
 import { generateTicketCode } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const body = await request.json();
     const { eventId, tickets: ticketList, count } = body;
@@ -17,8 +15,10 @@ export async function POST(request: NextRequest) {
       return corsResponse({ error: 'Event ID is required' }, 400);
     }
 
-    // Verify event exists and is active
-    const event = await db.event.findUnique({ where: { id: eventId } });
+    // Verify event exists and belongs to tenant's org
+    const event = await db.event.findFirst({
+      where: { id: eventId, organizationId: tenant.organizationId },
+    });
     if (!event) {
       return corsResponse({ error: 'Event not found' }, 404);
     }
@@ -43,12 +43,11 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     if (count && count > 0) {
-      // Auto-generate tickets
       for (let i = 0; i < count; i++) {
         const ticketNum = event.soldTickets + i + 1;
         ticketsToCreate.push({
           eventId,
-          userId: user.userId,
+          userId: tenant.userId,
           ticketCode: generateTicketCode(),
           ticketType: 'Standard',
           holderName: `Attendee ${ticketNum}`,
@@ -60,11 +59,10 @@ export async function POST(request: NextRequest) {
         });
       }
     } else if (ticketList && Array.isArray(ticketList)) {
-      // Use provided ticket list
       for (const t of ticketList) {
         ticketsToCreate.push({
           eventId,
-          userId: user.userId,
+          userId: tenant.userId,
           ticketCode: generateTicketCode(),
           ticketType: t.ticketType || 'Standard',
           holderName: t.holderName || 'Unknown',
@@ -92,9 +90,13 @@ export async function POST(request: NextRequest) {
       data: { soldTickets: { increment: ticketsToCreate.length } },
     });
 
-    // Fetch created tickets with relations
+    // Fetch created tickets with relations (tenant-scoped)
     const allEventTickets = await db.ticket.findMany({
-      where: { eventId, userId: user.userId },
+      where: {
+        eventId,
+        userId: tenant.userId,
+        event: { organizationId: tenant.organizationId },
+      },
       orderBy: { createdAt: 'desc' },
       take: ticketsToCreate.length,
       include: {
@@ -102,12 +104,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create transaction records
+    // Create transaction record with organizationId
     const totalAmount = ticketsToCreate.reduce((sum, t) => sum + t.price, 0);
     await db.transaction.create({
       data: {
         eventId,
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         amount: totalAmount,
         currency: event.currency,
         status: 'completed',
@@ -118,7 +121,8 @@ export async function POST(request: NextRequest) {
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'ticket.bulk_create',
         details: `Bulk created ${ticketsToCreate.length} tickets for ${event.name}`,
       },
@@ -131,6 +135,4 @@ export async function POST(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

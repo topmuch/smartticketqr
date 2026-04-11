@@ -1,18 +1,17 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, requireRole, corsResponse, withErrorHandler, isErrorResponse, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, requireTenantRole } from '@/lib/api-helper';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const { id } = await params;
 
-    const targetUser = await db.user.findUnique({
-      where: { id },
+    // Verify user belongs to same organization
+    const targetUser = await db.user.findFirst({
+      where: { id, organizationId: tenant.organizationId },
       select: {
         id: true,
         email: true,
@@ -20,6 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         role: true,
         avatar: true,
         isActive: true,
+        organizationId: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -44,17 +44,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin', 'admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { id } = await params;
     const body = await request.json();
 
-    const existingUser = await db.user.findUnique({ where: { id } });
+    // Verify user belongs to same organization
+    const existingUser = await db.user.findFirst({
+      where: { id, organizationId: tenant.organizationId },
+    });
     if (!existingUser) {
       return corsResponse({ error: 'User not found' }, 404);
     }
@@ -62,7 +64,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { name, email, role, isActive } = body;
 
     // Prevent non-super_admin from changing roles
-    if (role && user.role !== 'super_admin') {
+    if (role && tenant.role !== 'super_admin') {
       return corsResponse({ error: 'Only super admin can change user roles' }, 403);
     }
 
@@ -86,6 +88,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         role: true,
         avatar: true,
         isActive: true,
+        organizationId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -93,7 +96,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'user.update',
         details: `Updated user: ${updatedUser.email}`,
       },
@@ -105,16 +109,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { id } = await params;
 
-    const existingUser = await db.user.findUnique({ where: { id } });
+    // Verify user belongs to same organization
+    const existingUser = await db.user.findFirst({
+      where: { id, organizationId: tenant.organizationId },
+    });
     if (!existingUser) {
       return corsResponse({ error: 'User not found' }, 404);
     }
@@ -132,6 +138,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         name: true,
         role: true,
         isActive: true,
+        organizationId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -139,7 +146,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'user.deactivate',
         details: `Deactivated user: ${deactivatedUser.email}`,
       },
@@ -149,6 +157,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

@@ -7,6 +7,7 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  organizationId: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -18,7 +19,16 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function generateToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(
+    {
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role,
+      organizationId: payload.organizationId,
+    },
+    JWT_SECRET,
+    { expiresIn: '7d' },
+  );
 }
 
 export function verifyToken(token: string): JWTPayload | null {

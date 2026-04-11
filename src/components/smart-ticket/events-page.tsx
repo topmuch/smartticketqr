@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 
 import { useAuthStore } from '@/store/auth-store';
+import { useOrgStore } from '@/store/org-store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -244,6 +245,7 @@ function formatDateTime(dateStr: string) {
 
 export default function EventsPage() {
   const token = useAuthStore((s) => s.token);
+  const orgId = useOrgStore((s) => s.currentOrganization?.id);
 
   // Filter state
   const [search, setSearch] = useState('');
@@ -285,7 +287,10 @@ export default function EventsPage() {
     queryKey: ['events', typeFilter, statusFilter, search, page, pageSize],
     queryFn: async () => {
       const res = await fetch(buildUrl(), {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
+        },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -302,7 +307,8 @@ export default function EventsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
         },
         body: JSON.stringify(data),
       });
@@ -329,7 +335,8 @@ export default function EventsPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
         },
         body: JSON.stringify(data),
       });
@@ -355,7 +362,10 @@ export default function EventsPage() {
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/events/${id}`, {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
+        },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

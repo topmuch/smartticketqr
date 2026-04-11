@@ -1,14 +1,12 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, corsResponse, withErrorHandler, parsePagination, corsHeaders, encryptTicketData } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination } from '@/lib/api-helper';
 import { generateTicketCode } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const { searchParams } = new URL(request.url);
     const { page, limit } = parsePagination(searchParams);
@@ -16,7 +14,10 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
 
-    const where: Record<string, unknown> = {};
+    // Tenant filter through event's organizationId
+    const where: Record<string, unknown> = {
+      event: { organizationId: tenant.organizationId },
+    };
 
     if (eventId) where.eventId = eventId;
     if (status) where.status = status;
@@ -54,10 +55,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const body = await request.json();
     const { eventId, ticketType, holderName, holderEmail, holderPhone, seatNumber, price, currency } = body;
@@ -66,8 +65,10 @@ export async function POST(request: NextRequest) {
       return corsResponse({ error: 'Event ID, holder name, and holder email are required' }, 400);
     }
 
-    // Verify event exists and is active
-    const event = await db.event.findUnique({ where: { id: eventId } });
+    // Verify event exists and belongs to tenant's org
+    const event = await db.event.findFirst({
+      where: { id: eventId, organizationId: tenant.organizationId },
+    });
     if (!event) {
       return corsResponse({ error: 'Event not found' }, 404);
     }
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
     const ticket = await db.ticket.create({
       data: {
         eventId,
-        userId: user.userId,
+        userId: tenant.userId,
         ticketCode,
         ticketType: ticketType || 'Standard',
         holderName,
@@ -104,12 +105,13 @@ export async function POST(request: NextRequest) {
       data: { soldTickets: { increment: 1 } },
     });
 
-    // Create transaction record
+    // Create transaction record with organizationId
     const transaction = await db.transaction.create({
       data: {
         eventId,
         ticketId: ticket.id,
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         amount: ticket.price,
         currency: ticket.currency,
         status: 'completed',
@@ -120,13 +122,15 @@ export async function POST(request: NextRequest) {
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'ticket.create',
         details: `Created ticket ${ticketCode} for ${event.name}`,
       },
     });
 
     // Generate QR data
+    const { encryptTicketData } = await import('@/lib/crypto');
     const qrData = encryptTicketData(ticketCode, eventId);
 
     return corsResponse({
@@ -137,6 +141,4 @@ export async function POST(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

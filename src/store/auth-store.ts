@@ -7,6 +7,7 @@ export interface User {
   name: string;
   role: string;
   avatar?: string | null;
+  organizationId: string;
 }
 
 interface AuthState {

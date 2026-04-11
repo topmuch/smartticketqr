@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useAuthStore } from '@/store/auth-store';
+import { useOrgStore } from '@/store/org-store';
 
 interface ValidateResponse {
   valid: boolean;
@@ -87,9 +88,11 @@ interface ScanHistoryResponse {
 
 function getApiHeaders() {
   const token = useAuthStore.getState().token;
+  const orgId = useOrgStore.getState().currentOrganization?.id;
   return {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
+    'X-Organization-Id': orgId || '',
   };
 }
 

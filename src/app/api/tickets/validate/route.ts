@@ -1,13 +1,11 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, corsResponse, withErrorHandler, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
 
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const body = await request.json();
     const { ticketCode } = body;
@@ -25,12 +23,33 @@ export async function POST(request: NextRequest) {
     });
 
     if (!ticket) {
-      // Log invalid scan
+      // Log invalid scan with organizationId
       await db.scan.create({
         data: {
           ticketId: 'unknown',
           eventId: 'unknown',
-          scannedBy: user.userId,
+          scannedBy: tenant.userId,
+          organizationId: tenant.organizationId,
+          result: 'invalid',
+          deviceInfo: request.headers.get('user-agent') || 'Unknown',
+        },
+      });
+
+      return corsResponse({
+        valid: false,
+        ticket: null,
+        message: 'Ticket not found. Invalid ticket code.',
+      });
+    }
+
+    // Verify ticket belongs to tenant's organization
+    if (ticket.event.organizationId !== tenant.organizationId) {
+      await db.scan.create({
+        data: {
+          ticketId: 'unknown',
+          eventId: 'unknown',
+          scannedBy: tenant.userId,
+          organizationId: tenant.organizationId,
           result: 'invalid',
           deviceInfo: request.headers.get('user-agent') || 'Unknown',
         },
@@ -49,7 +68,8 @@ export async function POST(request: NextRequest) {
         data: {
           ticketId: ticket.id,
           eventId: ticket.eventId,
-          scannedBy: user.userId,
+          scannedBy: tenant.userId,
+          organizationId: tenant.organizationId,
           result: 'already_used',
           deviceInfo: request.headers.get('user-agent') || 'Unknown',
         },
@@ -74,7 +94,8 @@ export async function POST(request: NextRequest) {
         data: {
           ticketId: ticket.id,
           eventId: ticket.eventId,
-          scannedBy: user.userId,
+          scannedBy: tenant.userId,
+          organizationId: tenant.organizationId,
           result: 'invalid',
           deviceInfo: request.headers.get('user-agent') || 'Unknown',
         },
@@ -104,7 +125,8 @@ export async function POST(request: NextRequest) {
         data: {
           ticketId: ticket.id,
           eventId: ticket.eventId,
-          scannedBy: user.userId,
+          scannedBy: tenant.userId,
+          organizationId: tenant.organizationId,
           result: 'expired',
           deviceInfo: request.headers.get('user-agent') || 'Unknown',
         },
@@ -125,7 +147,7 @@ export async function POST(request: NextRequest) {
 
     // Valid ticket - mark as used
     const now = new Date();
-    const [updatedTicket, scan] = await Promise.all([
+    const [updatedTicket] = await Promise.all([
       db.ticket.update({
         where: { id: ticket.id },
         data: { status: 'used', validatedAt: now },
@@ -134,7 +156,8 @@ export async function POST(request: NextRequest) {
         data: {
           ticketId: ticket.id,
           eventId: ticket.eventId,
-          scannedBy: user.userId,
+          scannedBy: tenant.userId,
+          organizationId: tenant.organizationId,
           result: 'valid',
           deviceInfo: request.headers.get('user-agent') || 'Unknown',
         },
@@ -143,7 +166,8 @@ export async function POST(request: NextRequest) {
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'scan.validate',
         details: `Validated ticket ${ticket.ticketCode} for ${ticket.event.name}`,
       },
@@ -173,6 +197,4 @@ export async function POST(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

@@ -1,18 +1,20 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, requireRole, corsResponse, withErrorHandler, isErrorResponse, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, requireTenantRole } from '@/lib/api-helper';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const { id } = await params;
 
-    const ticket = await db.ticket.findUnique({
-      where: { id },
+    // Verify ticket belongs to tenant's org via event relation
+    const ticket = await db.ticket.findFirst({
+      where: {
+        id,
+        event: { organizationId: tenant.organizationId },
+      },
       include: {
         event: true,
         user: { select: { id: true, name: true, email: true } },
@@ -36,15 +38,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const { id } = await params;
     const body = await request.json();
 
-    const existingTicket = await db.ticket.findUnique({ where: { id } });
+    // Verify ticket belongs to tenant's org via event relation
+    const existingTicket = await db.ticket.findFirst({
+      where: {
+        id,
+        event: { organizationId: tenant.organizationId },
+      },
+    });
     if (!existingTicket) {
       return corsResponse({ error: 'Ticket not found' }, 404);
     }
@@ -72,7 +78,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'ticket.update',
         details: `Updated ticket ${ticket.ticketCode}`,
       },
@@ -84,16 +91,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin', 'admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { id } = await params;
 
-    const existingTicket = await db.ticket.findUnique({ where: { id } });
+    // Verify ticket belongs to tenant's org via event relation
+    const existingTicket = await db.ticket.findFirst({
+      where: {
+        id,
+        event: { organizationId: tenant.organizationId },
+      },
+    });
     if (!existingTicket) {
       return corsResponse({ error: 'Ticket not found' }, 404);
     }
@@ -116,12 +128,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       data: { soldTickets: { decrement: 1 } },
     });
 
-    // Create refund transaction
+    // Create refund transaction with organizationId
     await db.transaction.create({
       data: {
         eventId: ticket.eventId,
         ticketId: ticket.id,
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         amount: -ticket.price,
         currency: ticket.currency,
         status: 'refunded',
@@ -132,7 +145,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'ticket.cancel',
         details: `Cancelled ticket ${ticket.ticketCode} for ${ticket.event.name}`,
       },
@@ -142,6 +156,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

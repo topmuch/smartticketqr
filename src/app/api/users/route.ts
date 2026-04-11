@@ -1,27 +1,26 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, requireRole, corsResponse, withErrorHandler, isErrorResponse, parsePagination, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith, checkSubscriptionLimit } from '@/lib/api-helper';
 import { hashPassword } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin', 'admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { searchParams } = new URL(request.url);
     const { page, limit } = parsePagination(searchParams);
     const role = searchParams.get('role');
     const search = searchParams.get('search');
 
-    const where: Record<string, unknown> = {};
+    const where = tenantWhereWith(tenant.organizationId, {});
 
-    if (role) where.role = role;
+    if (role) (where as Record<string, unknown>).role = role;
     if (search) {
-      where.OR = [
+      (where as Record<string, unknown>).OR = [
         { name: { contains: search } },
         { email: { contains: search } },
       ];
@@ -37,6 +36,7 @@ export async function GET(request: NextRequest) {
           role: true,
           avatar: true,
           isActive: true,
+          organizationId: true,
           createdAt: true,
           updatedAt: true,
           _count: {
@@ -66,12 +66,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const body = await request.json();
     const { name, email, password, role } = body;
@@ -80,9 +79,22 @@ export async function POST(request: NextRequest) {
       return corsResponse({ error: 'Name, email, and password are required' }, 400);
     }
 
-    const existingUser = await db.user.findUnique({ where: { email } });
+    // Check plan user limit
+    const org = await db.organization.findUnique({ where: { id: tenant.organizationId } });
+    if (org) {
+      const currentUsers = await db.user.count({ where: { organizationId: tenant.organizationId } });
+      const limitCheck = checkSubscriptionLimit(org.subscriptionPlan, currentUsers, 'maxUsers');
+      if (!limitCheck.allowed) {
+        return corsResponse({ error: `User limit (${limitCheck.limit}) reached for your plan` }, 403);
+      }
+    }
+
+    // Check if user already exists in THIS organization
+    const existingUser = await db.user.findFirst({
+      where: { email, organizationId: tenant.organizationId },
+    });
     if (existingUser) {
-      return corsResponse({ error: 'Email already registered' }, 409);
+      return corsResponse({ error: 'Email already registered in this organization' }, 409);
     }
 
     const hashedPassword = await hashPassword(password);
@@ -93,6 +105,7 @@ export async function POST(request: NextRequest) {
         email,
         password: hashedPassword,
         role: role || 'operator',
+        organizationId: tenant.organizationId,
       },
       select: {
         id: true,
@@ -101,6 +114,7 @@ export async function POST(request: NextRequest) {
         role: true,
         avatar: true,
         isActive: true,
+        organizationId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -108,7 +122,8 @@ export async function POST(request: NextRequest) {
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'user.create',
         details: `Created user: ${newUser.email} with role ${newUser.role}`,
       },
@@ -118,6 +133,4 @@ export async function POST(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

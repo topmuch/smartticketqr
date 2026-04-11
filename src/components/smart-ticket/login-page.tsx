@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/select';
 import { useAuthStore } from '@/store/auth-store';
 import { useAppStore } from '@/store/app-store';
+import { useOrgStore, type Organization } from '@/store/org-store';
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -55,6 +56,7 @@ export default function LoginPage() {
 
   const authStore = useAuthStore();
   const appStore = useAppStore();
+  const orgStore = useOrgStore();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +82,21 @@ export default function LoginPage() {
       }
 
       authStore.login(data.user, data.token);
+
+      // Fetch user's organizations after login
+      try {
+        const orgRes = await fetch('/api/organizations', {
+          headers: { Authorization: `Bearer ${data.token}` },
+        });
+        if (orgRes.ok) {
+          const orgData = await orgRes.json();
+          const orgs: Organization[] = Array.isArray(orgData) ? orgData : orgData.data || [];
+          orgStore.setOrganizations(orgs);
+        }
+      } catch {
+        // Organization fetch failed silently - non-blocking
+      }
+
       toast.success(`Welcome back, ${data.user.name}!`);
       appStore.setCurrentPage('dashboard');
     } catch {
@@ -128,6 +145,21 @@ export default function LoginPage() {
       }
 
       authStore.login(data.user, data.token);
+
+      // Fetch user's organizations after registration
+      try {
+        const orgRes = await fetch('/api/organizations', {
+          headers: { Authorization: `Bearer ${data.token}` },
+        });
+        if (orgRes.ok) {
+          const orgData = await orgRes.json();
+          const orgs: Organization[] = Array.isArray(orgData) ? orgData : orgData.data || [];
+          orgStore.setOrganizations(orgs);
+        }
+      } catch {
+        // Organization fetch failed silently - non-blocking
+      }
+
       toast.success(`Account created! Welcome, ${data.user.name}!`);
       appStore.setCurrentPage('dashboard');
     } catch {

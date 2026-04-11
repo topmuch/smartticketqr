@@ -1,13 +1,17 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, requireRole, corsResponse, withErrorHandler, isErrorResponse, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, requireTenantRole } from '@/lib/api-helper';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
     const { id } = await params;
 
-    const event = await db.event.findUnique({
-      where: { id },
+    // Verify event belongs to tenant's org
+    const event = await db.event.findFirst({
+      where: { id, organizationId: tenant.organizationId },
       include: {
         _count: { select: { tickets: true } },
         user: { select: { id: true, name: true, email: true } },
@@ -37,17 +41,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin', 'admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { id } = await params;
     const body = await request.json();
 
-    const existingEvent = await db.event.findUnique({ where: { id } });
+    // Verify event belongs to tenant's org
+    const existingEvent = await db.event.findFirst({
+      where: { id, organizationId: tenant.organizationId },
+    });
     if (!existingEvent) {
       return corsResponse({ error: 'Event not found' }, 404);
     }
@@ -76,7 +82,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'event.update',
         details: `Updated event: ${event.name}`,
       },
@@ -88,16 +95,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return corsResponse({ error: 'Authentication required' }, 401);
-    }
-    const authCheck = requireRole(user, 'super_admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { id } = await params;
 
-    const existingEvent = await db.event.findUnique({ where: { id } });
+    // Verify event belongs to tenant's org
+    const existingEvent = await db.event.findFirst({
+      where: { id, organizationId: tenant.organizationId },
+    });
     if (!existingEvent) {
       return corsResponse({ error: 'Event not found' }, 404);
     }
@@ -114,7 +123,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     await db.activityLog.create({
       data: {
-        userId: user.userId,
+        userId: tenant.userId,
+        organizationId: tenant.organizationId,
         action: 'event.delete',
         details: `Cancelled event: ${event.name}`,
       },
@@ -124,6 +134,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }

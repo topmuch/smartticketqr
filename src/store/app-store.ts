@@ -10,7 +10,8 @@ export type PageName =
   | 'users'
   | 'transactions'
   | 'activity-logs'
-  | 'settings';
+  | 'settings'
+  | 'organizations';
 
 interface AppState {
   currentPage: PageName;

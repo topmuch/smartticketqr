@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   Calendar,
@@ -18,6 +18,8 @@ import {
   Moon,
   Sun,
   ChevronRight,
+  Building2,
+  Check,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -30,9 +32,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAppStore, type PageName } from '@/store/app-store';
 import { useAuthStore } from '@/store/auth-store';
+import { useOrgStore, type Organization } from '@/store/org-store';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -51,6 +62,7 @@ const navItems: NavItem[] = [
   { id: 'users', label: 'User Management', icon: Users, roles: ['super_admin', 'admin'] },
   { id: 'transactions', label: 'Transactions', icon: Receipt, roles: ['super_admin', 'admin'] },
   { id: 'activity-logs', label: 'Activity Logs', icon: Activity, roles: ['super_admin', 'admin'] },
+  { id: 'organizations', label: 'Organizations', icon: Building2, roles: ['super_admin', 'admin'] },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -212,6 +224,104 @@ function Sidebar() {
   );
 }
 
+function getPlanBadge(plan: Organization['subscriptionPlan']) {
+  switch (plan) {
+    case 'starter':
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground border-transparent">starter</Badge>;
+    case 'pro':
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">pro</Badge>;
+    case 'enterprise':
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">enterprise</Badge>;
+    default:
+      return null;
+  }
+}
+
+function OrgSwitcher() {
+  const { organizations, currentOrganization, setCurrentOrganization, setOrganizations } = useOrgStore();
+  const token = useAuthStore((s) => s.token);
+  const hasFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (token && organizations.length === 0 && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetch('/api/organizations', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => {
+          if (res.ok) return res.json();
+          throw new Error('Failed to fetch organizations');
+        })
+        .then((data) => {
+          const orgs: Organization[] = Array.isArray(data) ? data : data.data || [];
+          setOrganizations(orgs);
+        })
+        .catch(() => {
+          // Silent fail
+        });
+    }
+  }, [token, organizations.length, setOrganizations]);
+
+  const handleSwitch = (org: Organization) => {
+ setCurrentOrganization(org);
+    // Force refresh by reloading the page data
+    window.location.reload();
+  };
+
+  if (organizations.length <= 1 && !currentOrganization) {
+    return null;
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium">
+          {currentOrganization?.primaryColor && (
+            <span
+              className="h-2 w-2 rounded-full shrink-0"
+              style={{ backgroundColor: currentOrganization.primaryColor }}
+            />
+          )}
+          {!currentOrganization?.primaryColor && (
+            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+          <span className="hidden sm:inline max-w-[120px] truncate">
+            {currentOrganization?.name || 'Select Org'}
+          </span>
+          <span className="sm:hidden">Org</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Organizations</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {organizations.map((org) => (
+          <DropdownMenuItem
+            key={org.id}
+            onClick={() => handleSwitch(org)}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <span
+              className="h-2.5 w-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: org.primaryColor || '#10b981' }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{org.name}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{org.slug}</p>
+            </div>
+            {currentOrganization?.id === org.id && (
+              <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            )}
+            {getPlanBadge(org.subscriptionPlan)}
+          </DropdownMenuItem>
+        ))}
+        {organizations.length === 0 && (
+          <div className="py-2 px-2 text-xs text-muted-foreground text-center">No organizations</div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function Header() {
   const { currentPage, setSidebarOpen } = useAppStore();
   const { user } = useAuthStore();
@@ -234,6 +344,8 @@ function Header() {
       </div>
 
       <div className="flex items-center gap-2">
+        <OrgSwitcher />
+
         <Button variant="ghost" size="icon" className="h-9 w-9 relative">
           <Bell className="h-4 w-4" />
           <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-500" />

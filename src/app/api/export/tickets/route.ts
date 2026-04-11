@@ -1,18 +1,14 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getUserFromRequest, requireRole, withErrorHandler, isErrorResponse, corsHeaders } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, requireTenantRole, corsHeaders } from '@/lib/api-helper';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
-    const user = getUserFromRequest(request);
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'Authentication required' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      });
-    }
-    const authCheck = requireRole(user, 'super_admin', 'admin');
-    if (isErrorResponse(authCheck)) return authCheck;
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
+
+    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
+    if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get('eventId');
@@ -25,8 +21,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Verify event exists
-    const event = await db.event.findUnique({ where: { id: eventId } });
+    // Verify event exists AND belongs to tenant's organization
+    const event = await db.event.findFirst({
+      where: { id: eventId, organizationId: tenant.organizationId },
+    });
     if (!event) {
       return new Response(JSON.stringify({ error: 'Event not found' }), {
         status: 404,
@@ -34,9 +32,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch all tickets for the event
+    // Fetch all tickets for the event (tenant-scoped)
     const tickets = await db.ticket.findMany({
-      where: { eventId },
+      where: { eventId, event: { organizationId: tenant.organizationId } },
       orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { name: true, email: true } },
@@ -44,7 +42,6 @@ export async function GET(request: NextRequest) {
     });
 
     if (format === 'csv') {
-      // Build CSV
       const headers = [
         'Ticket Code',
         'Type',
@@ -102,6 +99,4 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
-}
+export async function OPTIONS() { return handleCors(); }
