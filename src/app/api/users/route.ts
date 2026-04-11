@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith, checkSubscriptionLimit } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith } from '@/lib/api-helper';
+import { checkLimit } from '@/lib/subscription-manager';
 import { hashPassword } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -79,14 +80,10 @@ export async function POST(request: NextRequest) {
       return corsResponse({ error: 'Name, email, and password are required' }, 400);
     }
 
-    // Check plan user limit
-    const org = await db.organization.findUnique({ where: { id: tenant.organizationId } });
-    if (org) {
-      const currentUsers = await db.user.count({ where: { organizationId: tenant.organizationId } });
-      const limitCheck = checkSubscriptionLimit(org.subscriptionPlan, currentUsers, 'maxUsers');
-      if (!limitCheck.allowed) {
-        return corsResponse({ error: `User limit (${limitCheck.limit}) reached for your plan` }, 403);
-      }
+    // Check subscription limit for users
+    const limitCheck = await checkLimit(tenant.organizationId, 'users');
+    if (!limitCheck.allowed) {
+      return corsResponse({ error: limitCheck.reason, limit: limitCheck, needsUpgrade: true }, 403);
     }
 
     // Check if user already exists in THIS organization

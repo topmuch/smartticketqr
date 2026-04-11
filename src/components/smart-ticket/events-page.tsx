@@ -30,6 +30,7 @@ import {
 
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
+import { useAppStore } from '@/store/app-store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -259,6 +260,8 @@ export default function EventsPage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const [upgradeLimitInfo, setUpgradeLimitInfo] = useState({ limit: 0, label: 'événements' });
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
 
   // Form state
@@ -324,8 +327,15 @@ export default function EventsPage() {
       setShowCreateDialog(false);
       resetForm();
     },
-    onError: (error) => {
-      toast.error(error.message);
+    onError: (error: Error & { needsUpgrade?: boolean; limit?: number }) => {
+      if (error.needsUpgrade) {
+        setShowCreateDialog(false);
+        resetForm();
+        setUpgradeLimitInfo({ limit: error.limit || 0, label: 'événements' });
+        setShowUpgradeDialog(true);
+      } else {
+        toast.error(error.message);
+      }
     },
   });
 
@@ -864,6 +874,32 @@ export default function EventsPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Upgrade Dialog ────────────────────────────────────────────── */}
+      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Limite d&apos;événements atteinte</DialogTitle>
+            <DialogDescription>
+              Votre plan actuel permet {upgradeLimitInfo.limit} {upgradeLimitInfo.label}. Passez à un plan supérieur pour en créer davantage.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowUpgradeDialog(false)}>
+              Fermer
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => {
+                setShowUpgradeDialog(false);
+                useAppStore.getState().setCurrentPage('billing');
+              }}
+            >
+              Mettre à niveau
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

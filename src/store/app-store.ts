@@ -11,7 +11,8 @@ export type PageName =
   | 'transactions'
   | 'activity-logs'
   | 'settings'
-  | 'organizations';
+  | 'organizations'
+  | 'billing';
 
 interface AppState {
   currentPage: PageName;

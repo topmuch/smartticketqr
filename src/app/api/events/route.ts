@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith, checkSubscriptionLimit } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith } from '@/lib/api-helper';
+import { checkLimit } from '@/lib/subscription-manager';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
@@ -64,14 +65,10 @@ export async function POST(request: NextRequest) {
       return corsResponse({ error: 'Name, startDate, endDate, and price are required' }, 400);
     }
 
-    // Check plan event limit
-    const org = await db.organization.findUnique({ where: { id: tenant.organizationId } });
-    if (org) {
-      const currentEvents = await db.event.count({ where: { organizationId: tenant.organizationId } });
-      const limitCheck = checkSubscriptionLimit(org.subscriptionPlan, currentEvents, 'maxEvents');
-      if (!limitCheck.allowed) {
-        return corsResponse({ error: `Event limit (${limitCheck.limit}) reached for your plan` }, 403);
-      }
+    // Check subscription limit for events
+    const limitCheck = await checkLimit(tenant.organizationId, 'events');
+    if (!limitCheck.allowed) {
+      return corsResponse({ error: limitCheck.reason, limit: limitCheck, needsUpgrade: true }, 403);
     }
 
     const event = await db.event.create({

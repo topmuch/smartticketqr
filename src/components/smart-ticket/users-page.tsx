@@ -61,6 +61,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
+import { useAppStore } from '@/store/app-store';
 
 interface UserRecord {
   id: string;
@@ -124,6 +125,8 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserRecord | null>(null);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const [upgradeLimitInfo, setUpgradeLimitInfo] = useState({ limit: 0, label: 'utilisateurs' });
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -172,8 +175,15 @@ export default function UsersPage() {
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
-    onError: (error) => {
-      toast.error('Failed to create user', { description: error.message });
+    onError: (error: Error & { needsUpgrade?: boolean; limit?: number }) => {
+      if (error.needsUpgrade) {
+        setDialogOpen(false);
+        resetForm();
+        setUpgradeLimitInfo({ limit: error.limit || 0, label: 'utilisateurs' });
+        setShowUpgradeDialog(true);
+      } else {
+        toast.error('Failed to create user', { description: error.message });
+      }
     },
   });
 
@@ -641,6 +651,32 @@ export default function UsersPage() {
                 : editUser
                 ? 'Update User'
                 : 'Create User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upgrade Dialog */}
+      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Limite d&apos;utilisateurs atteinte</DialogTitle>
+            <DialogDescription>
+              Votre plan actuel permet {upgradeLimitInfo.limit} {upgradeLimitInfo.label}. Passez à un plan supérieur pour en ajouter davantage.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowUpgradeDialog(false)}>
+              Fermer
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => {
+                setShowUpgradeDialog(false);
+                useAppStore.getState().setCurrentPage('billing');
+              }}
+            >
+              Mettre à niveau
             </Button>
           </DialogFooter>
         </DialogContent>

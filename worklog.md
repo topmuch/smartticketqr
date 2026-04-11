@@ -163,3 +163,97 @@ Stage Summary:
 - JWT tokens include organizationId for tenant context propagation
 - Plan limit enforcement on event creation and user creation
 - Key artifacts: src/lib/auth.ts (updated), src/app/api/**/*.ts (all 21 route files)
+
+---
+Task ID: p2-3
+Agent: Main
+Task: Subscription API routes and payment webhook (SmartTicketQR Phase 2)
+
+Work Log:
+- Created /api/subscription-plans/route.ts: GET endpoint returns all active subscription plans (public, no auth) with code, name, price, features, limits
+- Created /api/subscriptions/route.ts:
+  - GET: Returns current org's full subscription status with usage counts (auth required, resolveTenant)
+  - POST: Creates new subscription (admin+ role), calls createSubscription() then getPaymentProvider().createPayment(), returns subscription + paymentIntent
+- Created /api/subscriptions/check/route.ts: POST checks if an action is allowed under current plan (events, tickets_per_event, users, tickets_month), returns { allowed, reason, current, limit }
+- Created /api/webhooks/payment/route.ts: POST receives payment webhook from Wave/Orange Money (no auth), reads X-Provider + X-Signature headers, verifies HMAC via provider.verifyWebhook(), activates or fails subscription based on status, always returns 200 OK (idempotent), full audit logging
+- Created /api/webhooks/payment/simulate/route.ts: POST simulates successful payment for demo/testing (auth required), directly calls activateSubscription()
+- Updated /api/events/route.ts: Replaced inline checkSubscriptionLimit with checkLimit() from subscription-manager; response now includes reason, limit, and needsUpgrade flag
+- Updated /api/users/route.ts: Same pattern — replaced inline checkSubscriptionLimit with checkLimit() for cleaner subscription-aware limit enforcement
+- Updated /api/auth/seed/route.ts:
+  - Seeds 3 SubscriptionPlan records: starter (5,000 XOF), pro (25,000 XOF), enterprise (99,000 XOF) with features JSON arrays
+  - Creates demo org with enterprise plan + subscriptionExpiresAt (1 year)
+  - Creates active Subscription record (paymentMethod: 'manual', externalRef: 'DEMO-SEED-ENTERPRISE')
+  - All existing seed data preserved unchanged
+- All new routes use resolveTenant + isErrorResponse pattern, withErrorHandler wrapping, corsResponse, handleCors OPTIONS
+- Imports use @/lib/subscription-manager and @/lib/payment as specified
+- Final lint check: 0 errors
+
+Stage Summary:
+- 5 new API route files created, 3 existing files updated
+- Full subscription lifecycle API: list plans → check limits → create subscription → webhook activation
+- Payment provider integration (Wave, Orange Money) via webhook with HMAC verification
+- Demo simulation endpoint for testing without real payments
+- Subscription limit enforcement on event creation and user creation now uses centralized checkLimit()
+- Seed data includes subscription plans and active enterprise subscription for demo org
+- Key artifacts: src/app/api/subscription-plans/route.ts, src/app/api/subscriptions/route.ts, src/app/api/subscriptions/check/route.ts, src/app/api/webhooks/payment/route.ts, src/app/api/webhooks/payment/simulate/route.ts
+
+---
+Task ID: p2-4/p2-5
+Agent: Main
+Task: Billing, plans, and onboarding UI (SmartTicketQR Phase 2)
+
+Work Log:
+- Updated app-store.ts: Added 'billing' to PageName union type
+- Created billing-page.tsx: Full billing & subscription management page with:
+  - Current Plan Card showing plan name, status badge, expiry date, usage meters (events/users/tickets) with progress bars
+  - Warning banners for expired (red) and trial expiring (< 7 days, yellow)
+  - Plan Comparison Cards (3 cards: Starter, Pro, Enterprise) with pricing in FCFA
+  - Pro card highlighted as "Most Popular" with emerald border and badge
+  - Enterprise card with gold/amber border and "Best Value" badge
+  - CTA buttons: Upgrade/Downgrade based on current plan comparison
+  - Payment Method Selection Dialog with Wave, Orange Money, Manual options
+  - Duration selection: 1, 3 (-10%), 12 (-20%) months with discount display
+  - Total price calculation with discount summary
+  - "Confirm Payment" and "Simulate Payment (Demo)" buttons
+  - Subscription History Table with date, plan, amount, payment method, status
+  - Usage Charts: Bar chart (tickets per month) and Donut chart (plan limit usage) via recharts
+  - All API calls: GET /api/subscriptions, GET /api/subscription-plans, POST /api/subscriptions, POST /api/webhooks/payment/simulate
+  - TanStack Query for data fetching, sonner for toasts, framer-motion for card hover effects
+- Created subscription-banner.tsx: Inline warning banner with:
+  - Fetches subscription status on mount via /api/subscriptions
+  - Three warning states: expired (red), trial expiring < 7 days (yellow), limits > 80% (amber)
+  - "Upgrade Now" button navigates to billing page
+  - Dismissible with X button (stored in localStorage, auto-reshows after 24h)
+  - framer-motion slide-in animation
+  - Falls back to org-store data if API fails
+- Updated app-shell.tsx:
+  - Added CreditCard import from lucide-react
+  - Added SubscriptionBanner import
+  - Added "Billing & Plans" nav item (icon: CreditCard, id: 'billing', roles: super_admin, admin)
+  - Dynamic branding from organization: reads currentOrganization.primaryColor as CSS variable --org-primary
+  - Sidebar active item, icons, and chevron colored using --org-primary
+  - Organization logo shown in sidebar header (if set), else primaryColor icon
+  - Organization name displayed below "SmartTicketQR" in sidebar
+  - SubscriptionBanner rendered above children in content area
+- Updated page.tsx: Added BillingPage import and 'billing' route in pageComponents map
+- Updated events-page.tsx:
+  - Added useAppStore import
+  - Added upgrade dialog state (showUpgradeDialog, upgradeLimitInfo)
+  - Modified createMutation onError to detect needsUpgrade flag
+  - Added Upgrade Dialog with "Upgrade Plan" button navigating to billing page
+- Updated users-page.tsx:
+  - Added useAppStore import
+  - Added upgrade dialog state (showUpgradeDialog, upgradeLimitInfo)
+  - Modified createMutation onError to detect needsUpgrade flag
+  - Added Upgrade Dialog with "Upgrade Plan" button navigating to billing page
+- Final lint check: 0 errors
+- Dev server compiles successfully
+
+Stage Summary:
+- Complete billing & subscription management UI with 2 new components and 4 updated files
+- Billing page with plan comparison, payment method selection, usage charts, and subscription history
+- Subscription warning banner with auto-dismiss and multi-state detection
+- Dynamic org branding in sidebar with CSS variable-based theming
+- Plan limit enforcement UI: upgrade dialogs on events and users pages
+- All API calls include Authorization + X-Organization-Id headers
+- Key artifacts: src/components/smart-ticket/billing-page.tsx, src/components/smart-ticket/subscription-banner.tsx, updated app-shell.tsx, page.tsx, events-page.tsx, users-page.tsx, app-store.ts

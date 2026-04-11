@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Building2,
   Check,
+  CreditCard,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAppStore, type PageName } from '@/store/app-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore, type Organization } from '@/store/org-store';
+import SubscriptionBanner from '@/components/smart-ticket/subscription-banner';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -63,12 +65,14 @@ const navItems: NavItem[] = [
   { id: 'transactions', label: 'Transactions', icon: Receipt, roles: ['super_admin', 'admin'] },
   { id: 'activity-logs', label: 'Activity Logs', icon: Activity, roles: ['super_admin', 'admin'] },
   { id: 'organizations', label: 'Organizations', icon: Building2, roles: ['super_admin', 'admin'] },
+  { id: 'billing', label: 'Billing & Plans', icon: CreditCard, roles: ['super_admin', 'admin'] },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 function Sidebar() {
   const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen } = useAppStore();
   const { user, logout } = useAuthStore();
+  const currentOrg = useOrgStore((s) => s.currentOrganization);
   const { theme, setTheme } = useTheme();
   const [mounted] = useState(true);
 
@@ -107,12 +111,23 @@ function Sidebar() {
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-white">
-              <QrCode className="h-5 w-5" />
-            </div>
+            {currentOrg?.logo ? (
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden">
+                <img src={currentOrg.logo} alt={currentOrg.name} className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
+                style={{ backgroundColor: currentOrg?.primaryColor || '#059669' }}
+              >
+                <QrCode className="h-5 w-5" />
+              </div>
+            )}
             <div>
               <h1 className="text-base font-bold tracking-tight">SmartTicketQR</h1>
-              <p className="text-[10px] text-muted-foreground -mt-0.5">Ticket Management</p>
+              <p className="text-[10px] text-muted-foreground -mt-0.5 truncate max-w-[120px]">
+                {currentOrg?.name || 'Ticket Management'}
+              </p>
             </div>
           </div>
           <Button
@@ -140,17 +155,22 @@ function Sidebar() {
                         className={cn(
                           'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                           isActive
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 shadow-sm'
+                            ? 'shadow-sm'
                             : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                         )}
+                        style={isActive ? {
+                          backgroundColor: 'hsl(var(--org-primary) / 0.08)',
+                          color: 'var(--org-primary, hsl(var(--primary)))',
+                        } : undefined}
                       >
                         <Icon
                           className={cn(
                             'h-5 w-5 shrink-0',
                             isActive
-                              ? 'text-emerald-600 dark:text-emerald-400'
+                              ? ''
                               : 'text-muted-foreground'
                           )}
+                          style={isActive ? { color: 'var(--org-primary, hsl(var(--primary)))' } : undefined}
                         />
                         <span className="flex-1 text-left">{item.label}</span>
                         {item.badge && (
@@ -162,7 +182,7 @@ function Sidebar() {
                           </Badge>
                         )}
                         {isActive && (
-                          <ChevronRight className="h-4 w-4 text-emerald-500" />
+                          <ChevronRight className="h-4 w-4" style={{ color: 'var(--org-primary, hsl(var(--primary)))' }} />
                         )}
                       </button>
                     </TooltipTrigger>
@@ -381,13 +401,21 @@ interface AppShellProps {
 }
 
 export default function AppShell({ children }: AppShellProps) {
+  const currentOrg = useOrgStore((s) => s.currentOrganization);
+
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div
+      className="flex h-screen overflow-hidden bg-background"
+      style={{ '--org-primary': currentOrg?.primaryColor || '#059669' } as React.CSSProperties}
+    >
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto">
-          <div className="p-4 md:p-6 max-w-[1600px] mx-auto">{children}</div>
+          <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+            <SubscriptionBanner />
+            {children}
+          </div>
         </main>
       </div>
     </div>

@@ -23,6 +23,61 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Create subscription plans
+    await db.subscriptionPlan.upsert({
+      where: { code: 'starter' },
+      update: {},
+      create: {
+        code: 'starter',
+        name: 'Starter',
+        priceMonthly: 5000,
+        currency: 'XOF',
+        maxEvents: 5,
+        maxTicketsPerEvent: 500,
+        maxUsers: 3,
+        maxTicketsMonth: 2000,
+        features: JSON.stringify(['Basic QR scanning', 'Email support', '5 events/month', '500 tickets/event']),
+        isActive: true,
+        sortOrder: 1,
+      },
+    });
+
+    await db.subscriptionPlan.upsert({
+      where: { code: 'pro' },
+      update: {},
+      create: {
+        code: 'pro',
+        name: 'Pro',
+        priceMonthly: 25000,
+        currency: 'XOF',
+        maxEvents: 50,
+        maxTicketsPerEvent: 5000,
+        maxUsers: 20,
+        maxTicketsMonth: 20000,
+        features: JSON.stringify(['Advanced analytics', 'Priority support', '50 events/month', '5000 tickets/event', 'Bulk QR generation', 'CSV export']),
+        isActive: true,
+        sortOrder: 2,
+      },
+    });
+
+    await db.subscriptionPlan.upsert({
+      where: { code: 'enterprise' },
+      update: {},
+      create: {
+        code: 'enterprise',
+        name: 'Enterprise',
+        priceMonthly: 99000,
+        currency: 'XOF',
+        maxEvents: 999999,
+        maxTicketsPerEvent: 100000,
+        maxUsers: 999999,
+        maxTicketsMonth: 0,
+        features: JSON.stringify(['Unlimited events', 'Unlimited tickets', 'Unlimited users', 'Dedicated support', 'Custom branding', 'API access', 'Webhooks', 'Multi-org']),
+        isActive: true,
+        sortOrder: 3,
+      },
+    });
+
     // Create default organization
     const org = await db.organization.create({
       data: {
@@ -32,9 +87,25 @@ export async function POST(request: NextRequest) {
         primaryColor: '#059669',
         subscriptionPlan: 'enterprise',
         subscriptionStatus: 'active',
-        maxEvents: 999,
+        maxEvents: 999999,
         maxTicketsPerEvent: 100000,
-        maxUsers: 999,
+        maxUsers: 999999,
+        subscriptionExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+      },
+    });
+
+    // Create active subscription record for the demo org
+    await db.subscription.create({
+      data: {
+        organizationId: org.id,
+        planCode: 'enterprise',
+        amount: 99000,
+        currency: 'XOF',
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        status: 'active',
+        paymentMethod: 'manual',
+        externalRef: 'DEMO-SEED-ENTERPRISE',
       },
     });
 
