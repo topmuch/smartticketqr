@@ -54,7 +54,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return corsResponse({ error: 'Organization not found' }, 404);
     }
 
-    return corsResponse({ organization });
+    // Map Prisma _count to flat fields for the frontend
+    const mappedOrg = {
+      ...organization,
+      memberCount: organization._count.users,
+      eventCount: organization._count.events,
+    };
+
+    return corsResponse({ organization: mappedOrg });
   });
 }
 

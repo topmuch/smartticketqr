@@ -58,8 +58,15 @@ export async function GET(request: NextRequest) {
       db.organization.count({ where }),
     ]);
 
+    // Map Prisma _count to flat memberCount/eventCount fields for the frontend
+    const mappedOrgs = organizations.map((org) => ({
+      ...org,
+      memberCount: org._count.users,
+      eventCount: org._count.events,
+    }));
+
     return corsResponse({
-      data: organizations,
+      data: mappedOrgs,
       total,
       page,
       limit,

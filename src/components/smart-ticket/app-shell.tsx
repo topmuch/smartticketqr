@@ -273,9 +273,9 @@ function Sidebar() {
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-border">
           <div className="flex items-center gap-3">
-            {currentOrg?.logo ? (
+            {currentOrg?.logoUrl ? (
               <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden">
-                <img src={currentOrg.logo} alt={currentOrg.name} className="h-full w-full object-cover" />
+                <img src={currentOrg.logoUrl} alt={currentOrg.name} className="h-full w-full object-cover" />
               </div>
             ) : (
               <div

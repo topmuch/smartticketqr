@@ -5,7 +5,7 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
-  logo?: string | null;
+  logoUrl?: string | null;
   email?: string | null;
   phone?: string | null;
   primaryColor?: string | null;
