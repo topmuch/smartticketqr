@@ -319,13 +319,28 @@ export default function BillingPage() {
   const { data: plans } = useQuery<SubscriptionPlan[]>({
     queryKey: ['subscription-plans'],
     queryFn: async () => {
-      const res = await fetch('/api/subscription-plans', {
-        headers: getApiHeaders(),
-      });
-      if (!res.ok) return PLANS;
-      const json = await res.json();
-      // API returns { plans: [...] }
-      return Array.isArray(json) ? json : (json.plans || PLANS);
+      try {
+        const res = await fetch('/api/subscription-plans', {
+          headers: getApiHeaders(),
+        });
+        if (!res.ok) return PLANS;
+        const json = await res.json();
+        // API returns { plans: [...] } with field names: code, priceMonthly, maxEvents, etc.
+        // Normalize to match SubscriptionPlan interface: id, price, eventsLimit, etc.
+        const rawPlans = Array.isArray(json) ? json : (json.plans || json.data || PLANS);
+        if (!Array.isArray(rawPlans)) return PLANS;
+        return rawPlans.map((p: Record<string, unknown>) => ({
+          id: p.code || p.id || '',
+          name: p.name || '',
+          price: p.priceMonthly ?? p.price ?? 0,
+          eventsLimit: p.maxEvents ?? p.eventsLimit ?? 0,
+          ticketsPerEvent: p.maxTicketsPerEvent ?? p.ticketsPerEvent ?? 0,
+          usersLimit: p.maxUsers ?? p.usersLimit ?? 0,
+          features: Array.isArray(p.features) ? p.features : [],
+        }));
+      } catch {
+        return PLANS;
+      }
     },
   });
 
@@ -396,7 +411,7 @@ export default function BillingPage() {
 
   // ── Handlers ────────────────────────────────────────────────────────────
 
-  const activePlans = plans || PLANS;
+  const activePlans = Array.isArray(plans) && plans.length > 0 ? plans : PLANS;
   const currentPlanId = subscription?.plan || currentPlan || 'starter';
   const currentIndex = PLAN_ORDER.indexOf(currentPlanId as typeof PLAN_ORDER[number]);
 

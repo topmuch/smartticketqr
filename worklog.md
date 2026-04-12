@@ -396,3 +396,50 @@ Stage Summary:
 - Files modified: billing-page.tsx, scan-logs/route.ts, affiliates/route.ts, affiliates/stats/route.ts
 - All 23 APIs verified working via curl
 - All pages safe from `.map is not a function` errors
+
+---
+Task ID: billing-fix-v2
+Agent: Main Agent
+Task: Fix billing-page.tsx activePlans.map error + comprehensive audit of all superadmin tabs
+
+Work Log:
+- Diagnosed persistent `activePlans.map is not a function` in billing-page.tsx
+- Root cause 1: API `/api/subscription-plans` returns `{ plans: [...] }` with field names that differ from frontend SubscriptionPlan interface:
+  - API: `code` → Frontend expects: `id`
+  - API: `priceMonthly` → Frontend expects: `price`
+  - API: `maxEvents` → Frontend expects: `eventsLimit`
+  - API: `maxTicketsPerEvent` → Frontend expects: `ticketsPerEvent`
+  - API: `maxUsers` → Frontend expects: `usersLimit`
+- Fix: Rewrote subscription-plans queryFn with full field normalization + try/catch + multiple fallback levels
+- Fix: Changed `activePlans = plans || PLANS` to `activePlans = Array.isArray(plans) && plans.length > 0 ? plans : PLANS`
+- Audited ALL 21 page components for `.map()` safety:
+  - billing-page.tsx: FIXED (field normalization + defensive guards)
+  - scan-logs-page.tsx: SAFE (logs = data?.data || [])
+  - affiliates-page.tsx: SAFE (default = [], json.data || [])
+  - automation-page.tsx: SAFE (default = [], json.data || [])
+  - webhooks-page.tsx: SAFE (default = [], json.data || [])
+  - organizations-page.tsx: SAFE (orgsData?.data ?? [])
+  - transactions-page.tsx: SAFE (txData?.data || [])
+  - users-page.tsx: SAFE (usersData?.data || [])
+  - audit-logs-page.tsx: SAFE (logsData?.data || [])
+  - activity-logs-page.tsx: SAFE (similar pattern)
+  - reports-page.tsx: SAFE (eventsData?.data || [])
+  - settings-page.tsx: SAFE (hardcoded arrays)
+  - support-page.tsx: SAFE (defensive checks)
+  - events-page.tsx: SAFE (defensive checks)
+  - tickets-page.tsx: SAFE (defensive checks)
+  - custom-domains-page.tsx: SAFE (defensive checks)
+  - api-keys-page.tsx: SAFE (defensive checks)
+  - fraud-alerts-page.tsx: SAFE (defensive checks)
+  - scanner-page.tsx: SAFE (defensive checks)
+  - display-page.tsx: SAFE (Array.isArray checks)
+- Tested all 20 API endpoints — ALL return HTTP 200
+- Cleared .next cache to force full recompilation
+- `bun run lint` passes clean
+- Dev log shows no errors after recompilation
+
+Stage Summary:
+- 1 critical fix: billing-page.tsx field normalization + defensive guards
+- 19 other pages verified safe (already had proper defensive coding)
+- All 20 API endpoints verified working (HTTP 200)
+- Lint clean, no compilation errors, no runtime errors in dev log
