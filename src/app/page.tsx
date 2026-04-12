@@ -37,6 +37,7 @@ import LandingContactPage from '@/components/landing/contact-page';
 import LandingPrivacyPage from '@/components/landing/privacy-page';
 import LandingLoginPage from '@/components/landing/landing-login';
 import LandingRegisterPage from '@/components/landing/landing-register';
+import KioskDisplay from '@/components/smart-ticket/kiosk-display';
 import PublicDisplay from '@/components/smart-ticket/public-display';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
@@ -80,21 +81,28 @@ export default function Home() {
   const { currentPage, setCurrentPage } = useAppStore();
   const { currentLandingPage } = useLandingStore();
 
-  // ── Public display kiosk mode (no auth required) ────────────────────────
-  // When ?configId=xxx is present, render the public kiosk display directly
+  // ── Public display modes (no auth required) ────────────────────────────
+  // ?configId=xxx → kiosk display (legacy)
+  // ?board=xxx    → transport board display
   const [publicConfigId, setPublicConfigId] = React.useState<string | null>(null);
+  const [boardSlug, setBoardSlug] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const configId = params.get('configId');
+    const board = params.get('board');
     if (configId) {
       setPublicConfigId(configId);
+    } else if (board) {
+      setBoardSlug(board);
     }
   }, []);
 
+  const isPublicMode = !!(publicConfigId || boardSlug);
+
   // Verify token validity on mount
   useEffect(() => {
-    if (isAuthenticated && token && !publicConfigId) {
+    if (isAuthenticated && token && !isPublicMode) {
       // Check if token is still valid
       fetch('/api/auth/me', {
         headers: {
@@ -112,13 +120,18 @@ export default function Home() {
           // Network error, keep user logged in for offline support
         });
     }
-  }, [isAuthenticated, token, setCurrentPage, publicConfigId]);
+  }, [isAuthenticated, token, setCurrentPage, isPublicMode]);
 
   // ── Early returns (after all hooks) ──────────────────────────────────────
 
+  // Public transport board mode: bypass auth entirely
+  if (boardSlug) {
+    return <PublicDisplay boardSlug={boardSlug} />;
+  }
+
   // Public kiosk mode: bypass auth entirely
   if (publicConfigId) {
-    return <PublicDisplay configId={publicConfigId} />;
+    return <KioskDisplay configId={publicConfigId} />;
   }
 
   // Redirect to landing pages when not authenticated

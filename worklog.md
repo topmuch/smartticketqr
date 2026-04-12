@@ -443,3 +443,50 @@ Stage Summary:
 - 19 other pages verified safe (already had proper defensive coding)
 - All 20 API endpoints verified working (HTTP 200)
 - Lint clean, no compilation errors, no runtime errors in dev log
+
+---
+Task ID: transport-board-rebuild
+Agent: Main Agent
+Task: Rebuild "Écrans dynamiques" module as Transport Information Board (departure/arrival display)
+
+Work Log:
+- Read ALL existing display module files (display-page, display-kiosk, display-templates, public-display, API routes)
+- Read Prisma schema to understand data models
+- Added 2 new Prisma models: TransportLine + LineSchedule with Organization relation
+- Pushed schema to database (db:push + generate)
+- Created 4 API routes via subagent:
+  - GET/POST /api/lines — List/create transport lines with auth
+  - GET/PUT/DELETE /api/lines/[id] — CRUD single line
+  - GET/POST/PUT /api/lines/[id]/schedules — Manage schedules (times)
+  - GET /api/board?orgSlug=xxx — PUBLIC board (no auth, rate limited 60/min)
+- Rewrote display-page.tsx as Transport Line management dashboard:
+  - Tab "Lignes": Grid of line cards with CRUD actions
+  - Tab "Gérer les horaires": Schedule editor with departures/arrivals
+  - Tab "Écran Public": Board preview + URL copy + QR code generation
+  - Create/Edit line dialog with vehicle type, color picker
+  - QR code dialog with canvas-based generation + download
+- Rewrote public-display.tsx as transport departure/arrival board:
+  - TV layout (landscape): 2-column DÉPARTS | ARRIVÉES on dark bg
+  - Mobile layout (portrait): Tab toggle between Départs/Arrivées
+  - Live clock, auto-refresh every 15s
+  - Status logic: À l'heure, Dans X min, Retardé, Annulé, Parti
+  - Vehicle icons (Bus, Ship, TrainFront)
+- Updated page.tsx: Added ?board= query param handler alongside ?configId=
+- Created kiosk-display.tsx: Backup of original public-display for legacy ?configId= support
+- Created seed data: 3 lines (Bus 20, Bus 13, Ferry Gorée) with 14 schedules
+- Full API test suite verified:
+  - GET /api/board?orgSlug=demo → HTTP 200, 3 lines, 7 departures, 7 arrivals
+  - POST /api/lines → HTTP 201, creates with schedules
+  - GET /api/lines → HTTP 200, returns all lines with schedules
+  - All schedules include type, time, status, delayMinutes, note
+- `bun run lint` passes with zero errors
+- Dev log: no errors
+
+Stage Summary:
+- Module completely rebuilt from kiosk display to transport information board
+- 4 new API routes + 2 new Prisma models
+- Admin dashboard: line CRUD, schedule management, QR code generation
+- Public board: TV 2-column layout + mobile responsive, auto-refresh
+- Public URL: /?board=<orgSlug>
+- Seed data: 3 lines, 14 schedules created for demo
+- All tests passed, lint clean, zero errors

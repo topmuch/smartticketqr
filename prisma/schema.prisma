@@ -104,6 +104,7 @@ model Organization {
   supportTickets    SupportTicket[]
   affiliates        Affiliate[]
   fraudAlerts       FraudAlert[]
+  transportLines    TransportLine[]
 
   @@index([slug])
   @@index([subscriptionStatus])
@@ -642,4 +643,48 @@ model FraudAlert {
   @@index([severity])
   @@index([status])
   @@index([createdAt])
+}
+
+// ============================================================
+// 🚌 TRANSPORT LINES (bus, boat, ferry, train routes)
+// ============================================================
+model TransportLine {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String                                  // "Bus 20 - Dakar vers Thiès"
+  origin          String                                  // "Dakar"
+  destination     String                                  // "Thiès"
+  vehicleType     String   @default("bus")                // bus, boat, ferry, train
+  color           String   @default("#059669")            // accent color for display
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  schedules       LineSchedule[]
+
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+}
+
+// ============================================================
+// 🕐 LINE SCHEDULES (departure & arrival times per line)
+// ============================================================
+model LineSchedule {
+  id              String   @id @default(cuid())
+  lineId          String
+  type            String                                   // departure, arrival
+  time            String                                   // "HH:MM" format, e.g. "08:00"
+  status          String   @default("on_time")             // on_time, delayed, cancelled
+  delayMinutes    Int      @default(0)                     // minutes of delay
+  note            String?                                  // e.g. "Retard de 15 min"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  line            TransportLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  @@index([lineId])
+  @@index([lineId, type])
+  @@index([type])
+  @@index([time])
 }

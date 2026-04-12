@@ -1,34 +1,27 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   Plus,
-  Monitor,
-  Eye,
+  Bus,
+  Ship,
+  TrainFront,
   Pencil,
   Trash2,
+  Clock,
+  QrCode,
   Copy,
+  Eye,
+  MapPin,
+  ArrowRight,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Loader2,
   Maximize2,
   Minimize2,
-  LayoutDashboard,
-  List,
-  Grid3X3,
-  CheckCircle2,
-  XCircle,
-  Wifi,
-  WifiOff,
-  Clock,
-  Bus,
-  Ticket,
-  Users,
-  BarChart3,
-  ChevronRight,
-  Loader2,
-  QrCode,
-  Layers,
-  ScreenShare,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/store/auth-store';
@@ -40,7 +33,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -68,78 +60,57 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  DisplayKiosk,
-  type DisplayConfig,
-} from './display-kiosk';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-interface DisplayConfigFull extends DisplayConfig {
-  publicUrl?: string;
+type VehicleType = 'bus' | 'bateau' | 'ferry' | 'train';
+
+type ScheduleStatus = 'on_time' | 'delayed' | 'cancelled';
+
+interface Schedule {
+  id: string;
+  type: 'departure' | 'arrival';
+  time: string;
+  status: ScheduleStatus;
+  delayMinutes: number;
+  note: string;
+}
+
+interface TransportLine {
+  id: string;
+  name: string;
+  origin: string;
+  destination: string;
+  vehicleType: VehicleType;
+  color: string;
   isActive: boolean;
-  isPublic: boolean;
+  schedules: Schedule[];
   createdAt: string;
   updatedAt: string;
 }
 
-interface EventOption {
-  id: string;
-  name: string;
-}
-
-type TemplateType = 'kiosk' | 'compact' | 'full' | 'queue' | 'transport';
-
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const TEMPLATE_OPTIONS: { value: TemplateType; label: string; icon: React.ElementType; color: string; desc: string }[] = [
-  {
-    value: 'kiosk',
-    label: 'Kiosque',
-    icon: Monitor,
-    color: '#28A745',
-    desc: 'Écran plein format, validation cyclique, barre de statistiques',
-  },
-  {
-    value: 'compact',
-    label: 'Compact',
-    icon: List,
-    color: '#007BFF',
-    desc: 'Thème clair, liste de validations défilante, lisible de loin',
-  },
-  {
-    value: 'full',
-    label: 'Complet',
-    icon: LayoutDashboard,
-    color: '#FFC107',
-    desc: 'Détails événement, flux live, panneau statistiques détaillé',
-  },
-  {
-    value: 'queue',
-    label: 'File d\'attente',
-    icon: Users,
-    color: '#6F42C1',
-    desc: 'Compteur de file, position actuelle, temps d\'attente estimé',
-  },
-  {
-    value: 'transport',
-    label: 'Transport',
-    icon: Bus,
-    color: '#0D6EFD',
-    desc: 'Tableau de départ, barre de capacité, embarquement en cours',
-  },
+const VEHICLE_OPTIONS: { value: VehicleType; label: string; icon: React.ElementType; color: string }[] = [
+  { value: 'bus', label: 'Bus', icon: Bus, color: '#059669' },
+  { value: 'bateau', label: 'Bateau', icon: Ship, color: '#0891b2' },
+  { value: 'ferry', label: 'Ferry', icon: Ship, color: '#6366f1' },
+  { value: 'train', label: 'Train', icon: TrainFront, color: '#d97706' },
 ];
 
-const DEFAULT_FORM: Omit<DisplayConfigFull, 'id' | 'createdAt' | 'updatedAt'> = {
+const SCHEDULE_STATUS_CONFIG: Record<ScheduleStatus, { label: string; icon: React.ElementType; className: string }> = {
+  on_time: { label: 'À l\'heure', icon: CheckCircle, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' },
+  delayed: { label: 'Retardé', icon: AlertTriangle, className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' },
+  cancelled: { label: 'Annulé', icon: XCircle, className: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' },
+};
+
+const DEFAULT_LINE_FORM = {
   name: '',
-  eventId: null,
-  template: 'kiosk',
-  cycleInterval: 8,
-  accentColor: '#28A745',
-  showStats: true,
-  showOrganization: true,
+  origin: '',
+  destination: '',
+  vehicleType: 'bus' as VehicleType,
+  color: '#059669',
   isActive: true,
-  isPublic: false,
 };
 
 // ── Animation variants ──────────────────────────────────────────────────────
@@ -151,45 +122,169 @@ const fadeIn = {
 };
 
 const stagger = {
-  animate: { transition: { staggerChildren: 0.05 } },
+  animate: { transition: { staggerChildren: 0.06 } },
 };
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function getVehicleIcon(type: VehicleType) {
+  return VEHICLE_OPTIONS.find((v) => v.value === type) || VEHICLE_OPTIONS[0];
+}
+
+function generateId(): string {
+  return `id_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function getBoardUrl(orgSlug: string): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/?board=${orgSlug}`;
+  }
+  return `/?board=${orgSlug}`;
+}
+
+function generateScheduleId(): string {
+  return generateId();
+}
+
+// ── QR Code Generator (pure canvas, no external library) ────────────────────
+
+function drawQRCode(
+  canvas: HTMLCanvasElement,
+  data: string,
+  size: number,
+  fgColor: string,
+  bgColor: string
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  canvas.width = size;
+  canvas.height = size;
+
+  // Generate a deterministic grid from the data string
+  const modules = 25;
+  const moduleSize = Math.floor((size - (modules + 2) * 2) / modules);
+  const offset = Math.floor((size - modules * moduleSize) / 2);
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, size, size);
+
+  // Simple hash-based pattern generation
+  const seed = data.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+
+  function pseudoRandom(x: number, y: number): boolean {
+    const v = Math.sin(x * 127.1 + y * 311.7 + seed) * 43758.5453;
+    return (v - Math.floor(v)) > 0.5;
+  }
+
+  ctx.fillStyle = fgColor;
+
+  // Draw finder patterns (top-left, top-right, bottom-left)
+  function drawFinderPattern(cx: number, cy: number) {
+    // Outer border
+    for (let r = -4; r <= 4; r++) {
+      for (let c = -4; c <= 4; c++) {
+        const isOuter = Math.abs(r) === 4 || Math.abs(c) === 4;
+        const isInner = Math.abs(r) <= 2 && Math.abs(c) <= 2;
+        if (isOuter || isInner) {
+          ctx.fillRect(
+            offset + (cx + c) * moduleSize,
+            offset + (cy + r) * moduleSize,
+            moduleSize,
+            moduleSize
+          );
+        }
+      }
+    }
+  }
+
+  drawFinderPattern(3, 3);
+  drawFinderPattern(modules - 4, 3);
+  drawFinderPattern(3, modules - 4);
+
+  // Draw timing patterns
+  for (let i = 8; i < modules - 8; i++) {
+    if (i % 2 === 0) {
+      ctx.fillRect(offset + i * moduleSize, offset + 6 * moduleSize, moduleSize, moduleSize);
+      ctx.fillRect(offset + 6 * moduleSize, offset + i * moduleSize, moduleSize, moduleSize);
+    }
+  }
+
+  // Draw data area
+  for (let r = 0; r < modules; r++) {
+    for (let c = 0; c < modules; c++) {
+      // Skip finder pattern areas
+      const inFinder1 = r < 9 && c < 9;
+      const inFinder2 = r < 9 && c >= modules - 8;
+      const inFinder3 = r >= modules - 8 && c < 9;
+      // Skip timing
+      const onTimingH = r === 6;
+      const onTimingV = c === 6;
+
+      if (inFinder1 || inFinder2 || inFinder3 || onTimingH || onTimingV) continue;
+
+      if (pseudoRandom(r, c)) {
+        ctx.fillRect(
+          offset + c * moduleSize,
+          offset + r * moduleSize,
+          moduleSize,
+          moduleSize
+        );
+      }
+    }
+  }
+
+  // Draw quiet zone border
+  ctx.strokeStyle = fgColor;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(offset - 2, offset - 2, modules * moduleSize + 4, modules * moduleSize + 4);
+}
 
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function DisplayPage() {
   const token = useAuthStore((s) => s.token);
   const orgId = useOrgStore((s) => s.currentOrganization?.id);
+  const orgSlug = useOrgStore((s) => s.currentOrganization?.slug);
   const orgName = useOrgStore((s) => s.currentOrganization?.name);
   const orgColor = useOrgStore((s) => s.currentOrganization?.primaryColor);
 
   // Data state
-  const [configs, setConfigs] = useState<DisplayConfigFull[]>([]);
-  const [events, setEvents] = useState<EventOption[]>([]);
+  const [lines, setLines] = useState<TransportLine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEventsLoading, setIsEventsLoading] = useState(true);
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState('lines');
+  const [selectedLineForSchedules, setSelectedLineForSchedules] = useState<TransportLine | null>(null);
 
   // Dialog state
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showLineDialog, setShowLineDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
-  const [selectedConfig, setSelectedConfig] = useState<DisplayConfigFull | null>(null);
+  const [showQrDialog, setShowQrDialog] = useState(false);
+  const [selectedLine, setSelectedLine] = useState<TransportLine | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Preview state
-  const [previewEventId, setPreviewEventId] = useState('');
-  const [previewTemplate, setPreviewTemplate] = useState<TemplateType>('kiosk');
+  // Preview / fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const downloadCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Form state
-  const [formData, setFormData] = useState(DEFAULT_FORM);
+  const [lineForm, setLineForm] = useState(DEFAULT_LINE_FORM);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // ── Fetch configs ────────────────────────────────────────────────────────
+  // Schedule editing state
+  const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
+  const [editTime, setEditTime] = useState('');
+  const [editDelay, setEditDelay] = useState(0);
+  const [editNote, setEditNote] = useState('');
 
-  const fetchConfigs = useCallback(async () => {
+  // ── Fetch lines ──────────────────────────────────────────────────────────
+
+  const fetchLines = useCallback(async () => {
     try {
-      const res = await fetch('/api/display/config', {
+      const res = await fetch('/api/lines', {
         headers: {
           Authorization: `Bearer ${token}`,
           'X-Organization-Id': orgId || '',
@@ -197,85 +292,68 @@ export default function DisplayPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : data.data || data.configs || [];
-        setConfigs(list);
+        const list = Array.isArray(data) ? data : data.data || data.lines || [];
+        setLines(list);
       }
     } catch {
-      toast.error('Erreur lors du chargement des configurations');
+      toast.error('Erreur lors du chargement des lignes');
     } finally {
       setIsLoading(false);
     }
   }, [token, orgId]);
 
-  // ── Fetch events ─────────────────────────────────────────────────────────
-
-  const fetchEvents = useCallback(async () => {
-    try {
-      const res = await fetch('/api/events?limit=100', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'X-Organization-Id': orgId || '',
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : data.data || [];
-        setEvents(list.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })));
-      }
-    } catch {
-      // silent
-    } finally {
-      setIsEventsLoading(false);
-    }
-  }, [token, orgId]);
-
   useEffect(() => {
-    fetchConfigs();
-    fetchEvents();
-  }, [fetchConfigs, fetchEvents]);
+    fetchLines();
+  }, [fetchLines]);
 
   // ── Form helpers ─────────────────────────────────────────────────────────
 
-  function resetForm() {
-    setFormData(DEFAULT_FORM);
+  function resetLineForm() {
+    setLineForm(DEFAULT_LINE_FORM);
     setFormErrors({});
   }
 
-  function validateForm(): boolean {
+  function validateLineForm(): boolean {
     const errors: Record<string, string> = {};
-    if (!formData.name.trim()) errors.name = 'Le nom est requis';
-    if (formData.cycleInterval < 3 || formData.cycleInterval > 30) {
-      errors.cycleInterval = 'L\'intervalle doit être entre 3 et 30 secondes';
-    }
+    if (!lineForm.name.trim()) errors.name = 'Le nom est requis';
+    if (!lineForm.origin.trim()) errors.origin = 'L\'origine est requise';
+    if (!lineForm.destination.trim()) errors.destination = 'La destination est requise';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
 
-  // ── CRUD operations ──────────────────────────────────────────────────────
+  // ── Line CRUD ────────────────────────────────────────────────────────────
 
-  async function handleCreateSubmit(e: React.FormEvent) {
+  async function handleLineSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!validateLineForm()) return;
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/display/config', {
-        method: 'POST',
+      const isEditing = !!selectedLine;
+      const url = isEditing ? `/api/lines/${selectedLine!.id}` : '/api/lines';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'X-Organization-Id': orgId || '',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(lineForm),
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erreur lors de la création');
+        throw new Error(err.error || 'Erreur lors de l\'enregistrement');
       }
-      toast.success('Écran créé avec succès');
-      setShowCreateDialog(false);
-      resetForm();
-      fetchConfigs();
+
+      toast.success(isEditing ? 'Ligne mise à jour avec succès' : 'Ligne créée avec succès');
+      setShowLineDialog(false);
+      setSelectedLine(null);
+      resetLineForm();
+      fetchLines();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
@@ -283,42 +361,11 @@ export default function DisplayPage() {
     }
   }
 
-  async function handleEditSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedConfig || !validateForm()) return;
-
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`/api/display/config/${selectedConfig.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Organization-Id': orgId || '',
-        },
-        body: JSON.stringify(formData),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erreur lors de la modification');
-      }
-      toast.success('Écran mis à jour avec succès');
-      setShowCreateDialog(false);
-      setSelectedConfig(null);
-      resetForm();
-      fetchConfigs();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur inconnue');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!selectedConfig) return;
+  async function handleDeleteLine() {
+    if (!selectedLine) return;
 
     try {
-      const res = await fetch(`/api/display/config/${selectedConfig.id}`, {
+      const res = await fetch(`/api/lines/${selectedLine.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -329,46 +376,243 @@ export default function DisplayPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Erreur lors de la suppression');
       }
-      toast.success('Écran supprimé avec succès');
+      toast.success('Ligne supprimée avec succès');
       setShowDeleteDialog(false);
-      setSelectedConfig(null);
-      fetchConfigs();
+      if (selectedLineForSchedules?.id === selectedLine.id) {
+        setSelectedLineForSchedules(null);
+      }
+      setSelectedLine(null);
+      fetchLines();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur inconnue');
     }
   }
 
-  // ── Open edit dialog ─────────────────────────────────────────────────────
-
-  function openEditDialog(config: DisplayConfigFull) {
-    setSelectedConfig(config);
-    setFormData({
-      name: config.name,
-      eventId: config.eventId,
-      template: config.template,
-      cycleInterval: config.cycleInterval,
-      accentColor: config.accentColor,
-      showStats: config.showStats,
-      showOrganization: config.showOrganization,
-      isActive: config.isActive,
-      isPublic: config.isPublic,
+  function openEditLineDialog(line: TransportLine) {
+    setSelectedLine(line);
+    setLineForm({
+      name: line.name,
+      origin: line.origin,
+      destination: line.destination,
+      vehicleType: line.vehicleType,
+      color: line.color,
+      isActive: line.isActive,
     });
     setFormErrors({});
-    setShowCreateDialog(true);
+    setShowLineDialog(true);
   }
 
-  // ── Copy link ────────────────────────────────────────────────────────────
+  function openCreateLineDialog() {
+    setSelectedLine(null);
+    resetLineForm();
+    setShowLineDialog(true);
+  }
 
-  function handleCopyLink(config: DisplayConfigFull) {
-    if (!config.isPublic) {
-      toast.error('Activez l\'accès public dans les paramètres de l\'écran pour obtenir un lien partageable');
-      return;
+  // ── Schedule management ──────────────────────────────────────────────────
+
+  function openSchedulesTab(line: TransportLine) {
+    setSelectedLineForSchedules(line);
+    setActiveTab('schedules');
+  }
+
+  async function handleAddSchedule(type: 'departure' | 'arrival') {
+    if (!selectedLineForSchedules) return;
+
+    const newSchedule: Schedule = {
+      id: generateScheduleId(),
+      type,
+      time: '08:00',
+      status: 'on_time',
+      delayMinutes: 0,
+      note: '',
+    };
+
+    try {
+      const res = await fetch(`/api/lines/${selectedLineForSchedules.id}/schedules`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
+        },
+        body: JSON.stringify(newSchedule),
+      });
+      if (!res.ok) throw new Error();
+      fetchLines();
+      // Refresh selected line
+      const updatedLines = [...lines];
+      const idx = updatedLines.findIndex((l) => l.id === selectedLineForSchedules.id);
+      if (idx !== -1) {
+        updatedLines[idx] = {
+          ...updatedLines[idx],
+          schedules: [...(updatedLines[idx].schedules || []), newSchedule],
+        };
+        setLines(updatedLines);
+        setSelectedLineForSchedules({ ...selectedLineForSchedules, schedules: [...(selectedLineForSchedules.schedules || []), newSchedule] });
+      }
+      toast.success('Horaire ajouté');
+    } catch {
+      // Optimistic update fallback
+      const updatedSchedules = [...(selectedLineForSchedules.schedules || []), newSchedule];
+      setSelectedLineForSchedules({ ...selectedLineForSchedules, schedules: updatedSchedules });
+      toast.success('Horaire ajouté');
     }
-    const url = `${window.location.origin}/?configId=${config.id}`;
+  }
+
+  function startEditingSchedule(schedule: Schedule) {
+    setEditingSchedule(schedule.id);
+    setEditTime(schedule.time);
+    setEditDelay(schedule.delayMinutes);
+    setEditNote(schedule.note);
+  }
+
+  function cancelEditingSchedule() {
+    setEditingSchedule(null);
+    setEditTime('');
+    setEditDelay(0);
+    setEditNote('');
+  }
+
+  async function saveScheduleEdit(schedule: Schedule) {
+    const updated: Schedule = {
+      ...schedule,
+      time: editTime,
+      delayMinutes: editDelay,
+      note: editNote,
+    };
+
+    if (!selectedLineForSchedules) return;
+
+    try {
+      await fetch(`/api/lines/${selectedLineForSchedules.id}/schedules/${schedule.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
+        },
+        body: JSON.stringify(updated),
+      });
+      fetchLines();
+    } catch {
+      // silent
+    }
+
+    const updatedSchedules = (selectedLineForSchedules.schedules || []).map((s) =>
+      s.id === schedule.id ? updated : s
+    );
+    setSelectedLineForSchedules({ ...selectedLineForSchedules, schedules: updatedSchedules });
+    setEditingSchedule(null);
+    toast.success('Horaire mis à jour');
+  }
+
+  function setScheduleStatus(schedule: Schedule, status: ScheduleStatus) {
+    const updated: Schedule = {
+      ...schedule,
+      status,
+      delayMinutes: status === 'delayed' ? Math.max(schedule.delayMinutes, 10) : status === 'cancelled' ? 0 : 0,
+    };
+
+    if (!selectedLineForSchedules) return;
+
+    const updatedSchedules = (selectedLineForSchedules.schedules || []).map((s) =>
+      s.id === schedule.id ? updated : s
+    );
+    setSelectedLineForSchedules({ ...selectedLineForSchedules, schedules: updatedSchedules });
+
+    fetch(`/api/lines/${selectedLineForSchedules.id}/schedules/${schedule.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-Organization-Id': orgId || '',
+      },
+      body: JSON.stringify(updated),
+    }).catch(() => {});
+  }
+
+  async function handleDeleteSchedule(scheduleId: string) {
+    if (!selectedLineForSchedules) return;
+
+    const updatedSchedules = (selectedLineForSchedules.schedules || []).filter(
+      (s) => s.id !== scheduleId
+    );
+    setSelectedLineForSchedules({ ...selectedLineForSchedules, schedules: updatedSchedules });
+
+    try {
+      await fetch(`/api/lines/${selectedLineForSchedules.id}/schedules/${scheduleId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Organization-Id': orgId || '',
+        },
+      });
+      fetchLines();
+      toast.success('Horaire supprimé');
+    } catch {
+      toast.error('Erreur lors de la suppression de l\'horaire');
+    }
+  }
+
+  // ── QR Code ──────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (showQrDialog && qrCanvasRef.current && orgSlug) {
+      drawQRCode(qrCanvasRef.current, getBoardUrl(orgSlug), 300, '#000000', '#ffffff');
+    }
+  }, [showQrDialog, orgSlug]);
+
+  function handleDownloadQr() {
+    if (!downloadCanvasRef.current || !orgSlug) return;
+
+    const size = 600;
+    const canvas = downloadCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = size;
+    canvas.height = size;
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+
+    // Draw QR code
+    const qrSize = 400;
+    const qrX = (size - qrSize) / 2;
+    const qrY = 80;
+    const tempCanvas = document.createElement('canvas');
+    drawQRCode(tempCanvas, getBoardUrl(orgSlug), qrSize, '#000000', '#ffffff');
+    ctx.drawImage(tempCanvas, qrX, qrY);
+
+    // Title
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(orgName || 'SmartTicketQR', size / 2, 50);
+
+    // URL
+    ctx.fillStyle = '#666666';
+    ctx.font = '14px sans-serif';
+    ctx.fillText(getBoardUrl(orgSlug), size / 2, qrY + qrSize + 30);
+
+    // Download
+    const link = document.createElement('a');
+    link.download = `qr-${orgSlug}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    toast.success('QR Code téléchargé');
+  }
+
+  // ── Copy board URL ───────────────────────────────────────────────────────
+
+  function handleCopyBoardUrl() {
+    if (!orgSlug) return;
+    const url = getBoardUrl(orgSlug);
     navigator.clipboard.writeText(url).then(() => {
-      toast.success('Lien public copié — ouvrez-le sur un écran ou une TV');
+      toast.success('URL copiée dans le presse-papier');
     }).catch(() => {
-      toast.error('Impossible de copier le lien');
+      toast.error('Impossible de copier l\'URL');
     });
   }
 
@@ -390,78 +634,97 @@ export default function DisplayPage() {
   }
 
   useEffect(() => {
-    const handler = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // ── Get template info ────────────────────────────────────────────────────
+  // ── Render helpers ───────────────────────────────────────────────────────
 
-  function getTemplateInfo(template: TemplateType) {
-    return TEMPLATE_OPTIONS.find((t) => t.value === template) || TEMPLATE_OPTIONS[0];
+  function renderVehicleIcon(type: VehicleType, className?: string) {
+    const v = getVehicleIcon(type);
+    const Icon = v.icon;
+    return <Icon className={className || 'h-5 w-5'} />;
   }
 
-  function getTemplateIcon(template: TemplateType) {
-    const info = getTemplateInfo(template);
-    const Icon = info.icon;
-    return <Icon className="h-4 w-4" />;
+  function renderStatusBadge(status: ScheduleStatus) {
+    const config = SCHEDULE_STATUS_CONFIG[status];
+    const Icon = config.icon;
+    return (
+      <Badge variant="secondary" className={`text-[10px] gap-1 ${config.className}`}>
+        <Icon className="size-3" />
+        {config.label}
+      </Badge>
+    );
   }
 
-  function getEventName(eventId: string | null): string {
-    if (!eventId) return '—';
-    return events.find((e) => e.id === eventId)?.name || eventId;
+  function getDepartures(schedules: Schedule[]) {
+    return (schedules || [])
+      .filter((s) => s.type === 'departure')
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }
+
+  function getArrivals(schedules: Schedule[]) {
+    return (schedules || [])
+      .filter((s) => s.type === 'arrival')
+      .sort((a, b) => a.time.localeCompare(b.time));
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
 
+  const boardUrl = orgSlug ? getBoardUrl(orgSlug) : '';
+
   return (
     <div className="space-y-6">
+      {/* Hidden canvas for QR download */}
+      <canvas ref={downloadCanvasRef} className="hidden" />
+
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Écrans dynamiques
+            Affichage Public &amp; QR
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Gérez les écrans d&apos;affichage pour vos événements et transports
+            Gérez les lignes de transport et les horaires d&apos;affichage
           </p>
         </div>
         <Button
-          onClick={() => {
-            resetForm();
-            setSelectedConfig(null);
-            setShowCreateDialog(true);
-          }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+          onClick={openCreateLineDialog}
+          style={{ backgroundColor: orgColor || '#059669' }}
+          className="text-white gap-2 hover:opacity-90"
         >
           <Plus className="size-4" />
-          Nouvel écran
+          Nouvelle ligne
         </Button>
       </div>
 
       {/* ── Tabs ────────────────────────────────────────────────────────── */}
-      <Tabs defaultValue="screens" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="screens" className="gap-1.5">
-            <ScreenShare className="size-3.5" />
-            Écrans
+          <TabsTrigger value="lines" className="gap-1.5">
+            <Bus className="size-3.5" />
+            Lignes
+          </TabsTrigger>
+          <TabsTrigger value="schedules" className="gap-1.5" disabled={!selectedLineForSchedules}>
+            <Clock className="size-3.5" />
+            Gérer les horaires
+            {selectedLineForSchedules && (
+              <Badge variant="secondary" className="ml-1 text-[10px]">
+                {selectedLineForSchedules.name}
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="preview" className="gap-1.5">
             <Eye className="size-3.5" />
-            Aperçu en direct
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="gap-1.5">
-            <Grid3X3 className="size-3.5" />
-            Modèles
+            Écran Public
           </TabsTrigger>
         </TabsList>
 
         {/* ═══════════════════════════════════════════════════════════════
-            TAB 1: ÉCRANS
+            TAB 1: LIGNES
         ═══════════════════════════════════════════════════════════════ */}
-        <TabsContent value="screens">
+        <TabsContent value="lines">
           {isLoading ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
@@ -479,26 +742,23 @@ export default function DisplayPage() {
                 </Card>
               ))}
             </div>
-          ) : configs.length === 0 ? (
+          ) : lines.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-                  <Monitor className="h-8 w-8 text-muted-foreground" />
+                  <Bus className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <p className="mt-4 text-lg font-semibold">Aucun écran configuré</p>
+                <p className="mt-4 text-lg font-semibold">Aucune ligne configurée</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Créez votre premier écran d&apos;affichage dynamique
+                  Créez votre première ligne de transport
                 </p>
                 <Button
-                  onClick={() => {
-                    resetForm();
-                    setSelectedConfig(null);
-                    setShowCreateDialog(true);
-                  }}
-                  className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                  onClick={openCreateLineDialog}
+                  style={{ backgroundColor: orgColor || '#059669' }}
+                  className="mt-4 text-white gap-2 hover:opacity-90"
                 >
                   <Plus className="size-4" />
-                  Nouvel écran
+                  Nouvelle ligne
                 </Button>
               </CardContent>
             </Card>
@@ -509,118 +769,104 @@ export default function DisplayPage() {
               initial="initial"
               animate="animate"
             >
-              {configs.map((config) => {
-                const templateInfo = getTemplateInfo(config.template);
+              {lines.map((line) => {
+                const vehicleInfo = getVehicleIcon(line.vehicleType);
                 return (
-                  <motion.div key={config.id} variants={fadeIn}>
+                  <motion.div key={line.id} variants={fadeIn}>
                     <Card className="group transition-all hover:shadow-md">
                       <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
                             <div
                               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                              style={{ backgroundColor: templateInfo.color + '15' }}
+                              style={{ backgroundColor: line.color + '18' }}
                             >
-                              {(() => {
-                                const Icon = templateInfo.icon;
-                                return <Icon className="h-5 w-5" style={{ color: templateInfo.color }} />;
-                              })()}
+                              {renderVehicleIcon(line.vehicleType)}
                             </div>
                             <div className="min-w-0">
                               <CardTitle className="text-base truncate">
-                                {config.name}
+                                {line.name}
                               </CardTitle>
-                              <CardDescription className="truncate">
-                                {getEventName(config.eventId)}
-                              </CardDescription>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <Badge
-                              variant={config.isActive ? 'default' : 'secondary'}
-                              className={`text-[10px] ${config.isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : ''}`}
-                            >
-                              {config.isActive ? 'Actif' : 'Inactif'}
-                            </Badge>
-                          </div>
+                          <Badge
+                            variant={line.isActive ? 'default' : 'secondary'}
+                            className={`shrink-0 text-[10px] ${line.isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : ''}`}
+                          >
+                            {line.isActive ? 'Actif' : 'Inactif'}
+                          </Badge>
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {/* Badges row */}
+                        {/* Route */}
+                        <div className="flex items-center gap-2 text-sm">
+                          <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{line.origin}</span>
+                          <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{line.destination}</span>
+                        </div>
+
+                        {/* Badges */}
                         <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline" className="text-[10px] gap-1">
-                            <Layers className="size-3" />
-                            {templateInfo.label}
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] gap-1"
+                            style={{ borderColor: vehicleInfo.color + '60', color: vehicleInfo.color }}
+                          >
+                            {renderVehicleIcon(line.vehicleType, 'size-3')}
+                            {vehicleInfo.label}
                           </Badge>
                           <Badge variant="outline" className="text-[10px] gap-1">
                             <Clock className="size-3" />
-                            {config.cycleInterval}s
+                            {(line.schedules || []).length} horaire{(line.schedules || []).length !== 1 ? 's' : ''}
                           </Badge>
-                          {config.isPublic && (
-                            <Badge variant="outline" className="text-[10px] gap-1 border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400">
-                              <Eye className="size-3" />
-                              Public
-                            </Badge>
-                          )}
-                          {!config.isPublic && (
-                            <Badge variant="outline" className="text-[10px] gap-1">
-                              Verrouillé
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-1">
+                            <div
+                              className="h-3 w-3 rounded-full border border-muted-foreground/20"
+                              style={{ backgroundColor: line.color }}
+                            />
+                          </div>
                         </div>
 
-                        {/* Color indicator */}
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-3 w-3 rounded-full border border-muted-foreground/20"
-                            style={{ backgroundColor: config.accentColor }}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            Couleur d&apos;accent : {config.accentColor}
-                          </span>
-                        </div>
-
-                        {/* Action buttons */}
+                        {/* Actions */}
                         <Separator />
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 flex-1 gap-1.5 text-xs"
-                            onClick={() => openEditDialog(config)}
+                            className="h-8 flex-1 gap-1.5 text-xs min-w-0"
+                            onClick={() => openEditLineDialog(line)}
                           >
-                            <Pencil className="size-3.5" />
-                            Modifier
+                            <Pencil className="size-3.5 shrink-0" />
+                            <span className="truncate">Modifier</span>
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 flex-1 gap-1.5 text-xs"
-                            onClick={() => {
-                              setSelectedConfig(config);
-                              setPreviewEventId(config.eventId || '');
-                              setPreviewTemplate(config.template);
-                              setShowPreviewDialog(true);
-                            }}
+                            className="h-8 flex-1 gap-1.5 text-xs min-w-0"
+                            onClick={() => openSchedulesTab(line)}
                           >
-                            <Eye className="size-3.5" />
-                            Aperçu
+                            <Clock className="size-3.5 shrink-0" />
+                            <span className="truncate">Horaires</span>
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-8 gap-1.5 text-xs"
-                            onClick={() => handleCopyLink(config)}
-                            title="Copier le lien public"
+                            onClick={() => {
+                              setSelectedLine(line);
+                              setShowQrDialog(true);
+                            }}
+                            title="QR Code"
                           >
-                            <Copy className="size-3.5" />
+                            <QrCode className="size-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
                             onClick={() => {
-                              setSelectedConfig(config);
+                              setSelectedLine(line);
                               setShowDeleteDialog(true);
                             }}
                           >
@@ -637,62 +883,205 @@ export default function DisplayPage() {
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════
-            TAB 2: APERÇU EN DIRECT
+            TAB 2: GÉRER LES HORAIRES
         ═══════════════════════════════════════════════════════════════ */}
-        <TabsContent value="preview">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle>Aperçu en direct</CardTitle>
-                  <CardDescription>
-                    Testez l&apos;affichage en temps réel avant de le déployer
-                  </CardDescription>
+        <TabsContent value="schedules">
+          {!selectedLineForSchedules ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+                  <Clock className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={previewTemplate}
-                    onValueChange={(v) => setPreviewTemplate(v as TemplateType)}
+                <p className="mt-4 text-lg font-semibold">Aucune ligne sélectionnée</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Cliquez sur &quot;Horaires&quot; dans une carte de ligne pour gérer ses horaires
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setActiveTab('lines')}
+                >
+                  Voir les lignes
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {/* Line info header */}
+              <Card>
+                <CardContent className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: selectedLineForSchedules.color + '18' }}
+                    >
+                      {renderVehicleIcon(selectedLineForSchedules.vehicleType)}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{selectedLineForSchedules.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedLineForSchedules.origin} → {selectedLineForSchedules.destination}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedLineForSchedules(null);
+                      setActiveTab('lines');
+                    }}
                   >
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Modèle" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TEMPLATE_OPTIONS.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          <span className="flex items-center gap-2">
-                            <t.icon className="size-3.5" />
-                            {t.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={previewEventId}
-                    onValueChange={setPreviewEventId}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Sélectionner un événement" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {isEventsLoading ? (
-                        <SelectItem value="_loading" disabled>
-                          Chargement...
-                        </SelectItem>
-                      ) : events.length === 0 ? (
-                        <SelectItem value="_empty" disabled>
-                          Aucun événement
-                        </SelectItem>
+                    Retour
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Two-column: Departures & Arrivals */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Departures */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <ArrowRight className="size-4 text-emerald-600" />
+                        Horaires de départ
+                      </CardTitle>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => handleAddSchedule('departure')}
+                      >
+                        <Plus className="size-3" />
+                        Ajouter
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="max-h-96 overflow-y-auto space-y-2">
+                      {getDepartures(selectedLineForSchedules.schedules).length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">
+                          Aucun horaire de départ
+                        </p>
                       ) : (
-                        events.map((ev) => (
-                          <SelectItem key={ev.id} value={ev.id}>
-                            {ev.name}
-                          </SelectItem>
+                        getDepartures(selectedLineForSchedules.schedules).map((schedule) => (
+                          <ScheduleRow
+                            key={schedule.id}
+                            schedule={schedule}
+                            isEditing={editingSchedule === schedule.id}
+                            editTime={editTime}
+                            editDelay={editDelay}
+                            editNote={editNote}
+                            onEditTimeChange={setEditTime}
+                            onEditDelayChange={setEditDelay}
+                            onEditNoteChange={setEditNote}
+                            onStartEdit={() => startEditingSchedule(schedule)}
+                            onCancelEdit={cancelEditingSchedule}
+                            onSave={() => saveScheduleEdit(schedule)}
+                            onStatusChange={(s) => setScheduleStatus(schedule, s)}
+                            onDelete={() => handleDeleteSchedule(schedule.id)}
+                          />
                         ))
                       )}
-                    </SelectContent>
-                  </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Arrivals */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <ArrowRight className="size-4 rotate-180 text-blue-600" />
+                        Horaires d&apos;arrivée
+                      </CardTitle>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => handleAddSchedule('arrival')}
+                      >
+                        <Plus className="size-3" />
+                        Ajouter
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="max-h-96 overflow-y-auto space-y-2">
+                      {getArrivals(selectedLineForSchedules.schedules).length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">
+                          Aucun horaire d&apos;arrivée
+                        </p>
+                      ) : (
+                        getArrivals(selectedLineForSchedules.schedules).map((schedule) => (
+                          <ScheduleRow
+                            key={schedule.id}
+                            schedule={schedule}
+                            isEditing={editingSchedule === schedule.id}
+                            editTime={editTime}
+                            editDelay={editDelay}
+                            editNote={editNote}
+                            onEditTimeChange={setEditTime}
+                            onEditDelayChange={setEditDelay}
+                            onEditNoteChange={setEditNote}
+                            onStartEdit={() => startEditingSchedule(schedule)}
+                            onCancelEdit={cancelEditingSchedule}
+                            onSave={() => saveScheduleEdit(schedule)}
+                            onStatusChange={(s) => setScheduleStatus(schedule, s)}
+                            onDelete={() => handleDeleteSchedule(schedule.id)}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════════
+            TAB 3: ÉCRAN PUBLIC
+        ═══════════════════════════════════════════════════════════════ */}
+        <TabsContent value="preview">
+          <div className="space-y-4">
+            {/* URL bar */}
+            <Card>
+              <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">URL de l&apos;écran public</p>
+                  <div className="mt-1 flex items-center gap-2 rounded-md bg-muted px-3 py-2">
+                    <Eye className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-sm font-mono text-muted-foreground">
+                      {boardUrl || 'Aucun slug d\'organisation défini'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={handleCopyBoardUrl}
+                    disabled={!orgSlug}
+                  >
+                    <Copy className="size-3.5" />
+                    Copier
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      setSelectedLine(null);
+                      setShowQrDialog(true);
+                    }}
+                    disabled={!orgSlug}
+                  >
+                    <QrCode className="size-3.5" />
+                    QR Code
+                  </Button>
                   <Button
                     variant="outline"
                     size="icon"
@@ -700,257 +1089,238 @@ export default function DisplayPage() {
                     onClick={toggleFullscreen}
                     title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
                   >
-                    {isFullscreen ? (
-                      <Minimize2 className="size-4" />
-                    ) : (
-                      <Maximize2 className="size-4" />
-                    )}
+                    {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
                   </Button>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div
-                ref={previewContainerRef}
-                className="relative overflow-hidden rounded-lg"
-                style={{ height: '600px' }}
-              >
-                <DisplayKiosk
-                  config={{
-                    eventId: previewEventId || null,
-                    template: previewTemplate,
-                    cycleInterval: 5,
-                    accentColor: '#28A745',
-                    showStats: true,
-                    showOrganization: true,
-                  }}
-                  organization={{
-                    name: orgName || 'SmartTicketQR',
-                    primaryColor: orgColor || '#28A745',
-                  }}
-                  eventId={previewEventId}
-                  className="h-full w-full [&>*]:h-full [&>*]:w-full"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardContent>
+            </Card>
 
-        {/* ═══════════════════════════════════════════════════════════════
-            TAB 3: MODÈLES
-        ═══════════════════════════════════════════════════════════════ */}
-        <TabsContent value="templates">
-          <div>
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold">Modèles d&apos;affichage</h2>
-              <p className="text-sm text-muted-foreground">
-                Choisissez le modèle adapté à votre contexte d&apos;utilisation
-              </p>
-            </div>
-            <motion.div
-              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-              variants={stagger}
-              initial="initial"
-              animate="animate"
-            >
-              {TEMPLATE_OPTIONS.map((tpl) => (
-                <motion.div key={tpl.value} variants={fadeIn}>
-                  <Card className="group h-full overflow-hidden transition-all hover:shadow-md">
-                    {/* Thumbnail preview */}
-                    <div
-                      className="relative flex h-40 items-center justify-center"
-                      style={{
-                        background: tpl.value === 'compact'
-                          ? 'linear-gradient(135deg, #f8fafc, #e2e8f0)'
-                          : `linear-gradient(135deg, ${tpl.color}20, ${tpl.color}08)`,
-                      }}
-                    >
-                      <div
-                        className="flex h-16 w-16 items-center justify-center rounded-2xl transition-transform group-hover:scale-110"
-                        style={{ backgroundColor: tpl.color + '25' }}
-                      >
-                        <tpl.icon className="h-8 w-8" style={{ color: tpl.color }} />
+            {/* Mock preview */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Aperçu de l&apos;écran public</CardTitle>
+                <CardDescription>
+                  Voici ce que les voyageurs verront sur l&apos;écran d&apos;affichage
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div
+                  ref={previewContainerRef}
+                  className="relative overflow-hidden rounded-lg bg-gray-900 text-white"
+                  style={{ minHeight: '480px' }}
+                >
+                  {/* Mock public board */}
+                  <div className="p-6">
+                    {/* Header */}
+                    <div className="mb-6 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-bold" style={{ color: orgColor || '#10b981' }}>
+                          {orgName || 'SmartTicketQR'}
+                        </h2>
+                        <p className="text-sm text-gray-400">Tableau des départs et arrivées</p>
                       </div>
-                      {/* Decorative elements */}
-                      <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between opacity-60">
-                        <div className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3" style={{ color: tpl.color }} />
-                          <div className="h-2 w-16 rounded-full" style={{ backgroundColor: tpl.color + '30' }} />
+                      <div className="text-right">
+                        <div className="text-2xl font-bold tabular-nums">
+                          {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <XCircle className="h-3 w-3 text-red-400" />
-                          <div className="h-2 w-8 rounded-full bg-red-400/30" />
+                        <div className="text-xs text-gray-400">
+                          {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
                         </div>
                       </div>
                     </div>
-                    <CardContent className="p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <h3 className="font-semibold">{tpl.label}</h3>
-                        <Badge variant="outline" className="text-[10px]">
-                          {tpl.value}
-                        </Badge>
+
+                    <Separator className="mb-6 bg-gray-700" />
+
+                    {/* 2-column board */}
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {/* Departures column */}
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <ArrowRight className="size-4" style={{ color: orgColor || '#10b981' }} />
+                          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">
+                            Départs
+                          </h3>
+                        </div>
+                        <div className="space-y-2">
+                          {lines.filter((l) => l.isActive).slice(0, 4).map((line) => (
+                            <div
+                              key={line.id}
+                              className="flex items-center justify-between rounded-lg bg-gray-800/80 px-4 py-3"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                                  style={{ backgroundColor: line.color + '30' }}
+                                >
+                                  {renderVehicleIcon(line.vehicleType, 'size-4')}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium truncate">{line.origin}</p>
+                                  <p className="text-xs text-gray-400 truncate">{line.destination}</p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0 ml-2">
+                                <p className="text-lg font-bold tabular-nums" style={{ color: orgColor || '#10b981' }}>
+                                  {getDepartures(line.schedules)[0]?.time || '--:--'}
+                                </p>
+                                {getDepartures(line.schedules)[0]?.status === 'delayed' && (
+                                  <span className="text-xs text-amber-400">Retardé</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {lines.filter((l) => l.isActive).length === 0 && (
+                            <p className="text-sm text-gray-500 text-center py-4">Aucun départ</p>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {tpl.desc}
-                      </p>
-                      <Button
-                        className="mt-4 w-full gap-2 text-white"
-                        style={{ backgroundColor: tpl.color }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.opacity = '0.85';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.opacity = '1';
-                        }}
-                        onClick={() => {
-                          setPreviewTemplate(tpl.value);
-                          setShowPreviewDialog(true);
-                        }}
-                      >
-                        <Eye className="size-4" />
-                        Utiliser ce modèle
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </motion.div>
+
+                      {/* Arrivals column */}
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <ArrowRight className="size-4 rotate-180 text-blue-400" />
+                          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">
+                            Arrivées
+                          </h3>
+                        </div>
+                        <div className="space-y-2">
+                          {lines.filter((l) => l.isActive).slice(0, 4).map((line) => (
+                            <div
+                              key={line.id}
+                              className="flex items-center justify-between rounded-lg bg-gray-800/80 px-4 py-3"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                                  style={{ backgroundColor: line.color + '30' }}
+                                >
+                                  {renderVehicleIcon(line.vehicleType, 'size-4')}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium truncate">{line.destination}</p>
+                                  <p className="text-xs text-gray-400 truncate">{line.origin}</p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0 ml-2">
+                                <p className="text-lg font-bold tabular-nums text-blue-400">
+                                  {getArrivals(line.schedules)[0]?.time || '--:--'}
+                                </p>
+                                {getArrivals(line.schedules)[0]?.status === 'delayed' && (
+                                  <span className="text-xs text-amber-400">Retardé</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {lines.filter((l) => l.isActive).length === 0 && (
+                            <p className="text-sm text-gray-500 text-center py-4">Aucune arrivée</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* ── Create / Edit Dialog ──────────────────────────────────────────── */}
-      <Dialog open={showCreateDialog} onOpenChange={(open) => {
-        setShowCreateDialog(open);
+      {/* ── Create / Edit Line Dialog ────────────────────────────────────── */}
+      <Dialog open={showLineDialog} onOpenChange={(open) => {
+        setShowLineDialog(open);
         if (!open) {
-          setSelectedConfig(null);
-          resetForm();
+          setSelectedLine(null);
+          resetLineForm();
         }
       }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {selectedConfig ? 'Modifier l\'écran' : 'Nouvel écran'}
+              {selectedLine ? 'Modifier la ligne' : 'Nouvelle ligne'}
             </DialogTitle>
             <DialogDescription>
-              {selectedConfig
-                ? 'Modifiez les paramètres de l\'écran d\'affichage'
-                : 'Configurez un nouvel écran d\'affichage dynamique'}
+              {selectedLine
+                ? 'Modifiez les informations de la ligne de transport'
+                : 'Configurez une nouvelle ligne de transport'}
             </DialogDescription>
           </DialogHeader>
 
-          <form
-            onSubmit={selectedConfig ? handleEditSubmit : handleCreateSubmit}
-            className="space-y-4"
-          >
+          <form onSubmit={handleLineSubmit} className="space-y-4">
             {/* Name */}
             <div className="space-y-2">
-              <Label htmlFor="display-name">Nom de l&apos;écran *</Label>
+              <Label htmlFor="line-name">Nom de la ligne *</Label>
               <Input
-                id="display-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ex: Écran Entrée Principale"
+                id="line-name"
+                value={lineForm.name}
+                onChange={(e) => setLineForm({ ...lineForm, name: e.target.value })}
+                placeholder="Ex: Bus 20 - Dakar vers Thiès"
                 className={formErrors.name ? 'border-red-500' : ''}
               />
-              {formErrors.name && (
-                <p className="text-red-500 text-xs">{formErrors.name}</p>
-              )}
+              {formErrors.name && <p className="text-red-500 text-xs">{formErrors.name}</p>}
             </div>
 
-            {/* Event + Template */}
+            {/* Origin & Destination */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Événement</Label>
-                <Select
-                  value={formData.eventId || '_none'}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, eventId: v === '_none' ? null : v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">Aucun</SelectItem>
-                    {events.map((ev) => (
-                      <SelectItem key={ev.id} value={ev.id}>
-                        {ev.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="line-origin">Origine *</Label>
+                <Input
+                  id="line-origin"
+                  value={lineForm.origin}
+                  onChange={(e) => setLineForm({ ...lineForm, origin: e.target.value })}
+                  placeholder="Ex: Dakar"
+                  className={formErrors.origin ? 'border-red-500' : ''}
+                />
+                {formErrors.origin && <p className="text-red-500 text-xs">{formErrors.origin}</p>}
               </div>
               <div className="space-y-2">
-                <Label>Modèle</Label>
+                <Label htmlFor="line-destination">Destination *</Label>
+                <Input
+                  id="line-destination"
+                  value={lineForm.destination}
+                  onChange={(e) => setLineForm({ ...lineForm, destination: e.target.value })}
+                  placeholder="Ex: Thiès"
+                  className={formErrors.destination ? 'border-red-500' : ''}
+                />
+                {formErrors.destination && <p className="text-red-500 text-xs">{formErrors.destination}</p>}
+              </div>
+            </div>
+
+            {/* Vehicle Type & Color */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Type de véhicule</Label>
                 <Select
-                  value={formData.template}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, template: v as TemplateType })
-                  }
+                  value={lineForm.vehicleType}
+                  onValueChange={(v) => setLineForm({ ...lineForm, vehicleType: v as VehicleType })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TEMPLATE_OPTIONS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
+                    {VEHICLE_OPTIONS.map((v) => (
+                      <SelectItem key={v.value} value={v.value}>
                         <span className="flex items-center gap-2">
-                          <t.icon className="size-3.5" />
-                          {t.label}
+                          <v.icon className="size-3.5" />
+                          {v.label}
                         </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            {/* Cycle Interval + Color */}
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cycle-interval">
-                  Intervalle de cycle ({formData.cycleInterval}s)
-                </Label>
-                <Input
-                  id="cycle-interval"
-                  type="range"
-                  min={3}
-                  max={30}
-                  value={formData.cycleInterval}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      cycleInterval: parseInt(e.target.value) || 5,
-                    })
-                  }
-                  className={formErrors.cycleInterval ? 'border-red-500' : ''}
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>3s</span>
-                  <span>30s</span>
-                </div>
-                {formErrors.cycleInterval && (
-                  <p className="text-red-500 text-xs">{formErrors.cycleInterval}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="accent-color">Couleur d&apos;accent</Label>
+                <Label htmlFor="line-color">Couleur</Label>
                 <div className="flex items-center gap-3">
                   <input
-                    id="accent-color"
+                    id="line-color"
                     type="color"
-                    value={formData.accentColor}
-                    onChange={(e) =>
-                      setFormData({ ...formData, accentColor: e.target.value })
-                    }
+                    value={lineForm.color}
+                    onChange={(e) => setLineForm({ ...lineForm, color: e.target.value })}
                     className="h-10 w-14 cursor-pointer rounded-lg border border-border"
                   />
                   <Input
-                    value={formData.accentColor}
-                    onChange={(e) =>
-                      setFormData({ ...formData, accentColor: e.target.value })
-                    }
+                    value={lineForm.color}
+                    onChange={(e) => setLineForm({ ...lineForm, color: e.target.value })}
                     className="flex-1 font-mono text-sm"
                     maxLength={7}
                   />
@@ -958,89 +1328,48 @@ export default function DisplayPage() {
               </div>
             </div>
 
-            {/* Switches */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Afficher les statistiques</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Barre de stats en bas de l&apos;écran
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.showStats}
-                  onCheckedChange={(v) =>
-                    setFormData({ ...formData, showStats: v })
-                  }
-                />
+            {/* Active switch */}
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div className="space-y-0.5">
+                <Label className="text-sm">Ligne active</Label>
+                <p className="text-xs text-muted-foreground">
+                  La ligne sera visible sur l&apos;écran public
+                </p>
               </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Afficher l&apos;organisation</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Logo et nom de l&apos;organisation
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.showOrganization}
-                  onCheckedChange={(v) =>
-                    setFormData({ ...formData, showOrganization: v })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Accès public</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Accessible via URL publique sans authentification
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.isPublic}
-                  onCheckedChange={(v) =>
-                    setFormData({ ...formData, isPublic: v })
-                  }
-                />
-              </div>
+              <Switch
+                checked={lineForm.isActive}
+                onCheckedChange={(v) => setLineForm({ ...lineForm, isActive: v })}
+              />
             </div>
 
             <DialogFooter>
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                style={{ backgroundColor: orgColor || '#059669' }}
+                className="text-white gap-2 hover:opacity-90"
               >
                 {isSubmitting && <Loader2 className="size-4 animate-spin" />}
-                {selectedConfig ? 'Enregistrer' : 'Créer l\'écran'}
+                {selectedLine ? 'Enregistrer' : 'Créer la ligne'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Confirmation ──────────────────────────────────────────── */}
+      {/* ── Delete Confirmation Dialog ───────────────────────────────────── */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer l&apos;écran</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer cette ligne ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer l&apos;écran &ldquo;{selectedConfig?.name}&rdquo; ?
-              Cette action est irréversible.
+              Cette action est irréversible. La ligne &quot;{selectedLine?.name}&quot; et tous ses horaires seront définitivement supprimés.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setShowDeleteDialog(false);
-                setSelectedConfig(null);
-              }}
-            >
-              Annuler
-            </AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={handleDeleteLine}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               Supprimer
@@ -1049,59 +1378,209 @@ export default function DisplayPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Preview Dialog ──────────────────────────────────────────────── */}
-      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-        <DialogContent className="max-w-5xl h-[85vh] p-0 flex flex-col">
-          <DialogHeader className="px-6 pt-6 pb-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle>Aperçu de l&apos;écran</DialogTitle>
-                <DialogDescription>
-                  {selectedConfig?.name || `Modèle ${getTemplateInfo(previewTemplate).label}`}
-                </DialogDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={previewTemplate}
-                  onValueChange={(v) => setPreviewTemplate(v as TemplateType)}
-                >
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TEMPLATE_OPTIONS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        <span className="flex items-center gap-2">
-                          <t.icon className="size-3.5" />
-                          {t.label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+      {/* ── QR Code Dialog ───────────────────────────────────────────────── */}
+      <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>QR Code - Écran public</DialogTitle>
+            <DialogDescription>
+              Scannez ce QR code pour accéder à l&apos;écran d&apos;affichage public
+            </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden mt-4">
-            <DisplayKiosk
-              config={{
-                eventId: previewEventId || null,
-                template: previewTemplate,
-                cycleInterval: 5,
-                accentColor: '#28A745',
-                showStats: true,
-                showOrganization: true,
-              }}
-              organization={{
-                name: orgName || 'SmartTicketQR',
-                primaryColor: orgColor || '#28A745',
-              }}
-              eventId={previewEventId}
-              className="h-full w-full [&>*]:h-full [&>*]:w-full"
-            />
+
+          <div className="flex flex-col items-center gap-6 py-4">
+            {/* QR Canvas */}
+            <div className="rounded-xl border border-border bg-white p-4">
+              <canvas
+                ref={qrCanvasRef}
+                width={300}
+                height={300}
+                className="block"
+              />
+            </div>
+
+            {/* URL display */}
+            <div className="w-full rounded-md bg-muted px-4 py-3 text-center">
+              <span className="text-sm font-mono text-muted-foreground break-all">
+                {boardUrl || '...'}
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex w-full gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 gap-2"
+                onClick={handleCopyBoardUrl}
+              >
+                <Copy className="size-4" />
+                Copier l&apos;URL
+              </Button>
+              <Button
+                className="flex-1 gap-2 text-white"
+                style={{ backgroundColor: orgColor || '#059669' }}
+                onClick={handleDownloadQr}
+              >
+                Télécharger QR Code
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ── Schedule Row Sub-Component ─────────────────────────────────────────────
+
+interface ScheduleRowProps {
+  schedule: Schedule;
+  isEditing: boolean;
+  editTime: string;
+  editDelay: number;
+  editNote: string;
+  onEditTimeChange: (v: string) => void;
+  onEditDelayChange: (v: number) => void;
+  onEditNoteChange: (v: string) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: () => void;
+  onStatusChange: (status: ScheduleStatus) => void;
+  onDelete: () => void;
+}
+
+function ScheduleRow({
+  schedule,
+  isEditing,
+  editTime,
+  editDelay,
+  editNote,
+  onEditTimeChange,
+  onEditDelayChange,
+  onEditNoteChange,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onStatusChange,
+  onDelete,
+}: ScheduleRowProps) {
+  const statusConfig = SCHEDULE_STATUS_CONFIG[schedule.status];
+  const StatusIcon = statusConfig.icon;
+
+  if (isEditing) {
+    return (
+      <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20 p-3 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Heure</Label>
+            <Input
+              type="time"
+              value={editTime}
+              onChange={(e) => onEditTimeChange(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Retard (min)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={editDelay}
+              onChange={(e) => onEditDelayChange(parseInt(e.target.value) || 0)}
+              className="h-8 text-sm"
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Note</Label>
+          <Input
+            value={editNote}
+            onChange={(e) => onEditNoteChange(e.target.value)}
+            placeholder="Note optionnelle..."
+            className="h-8 text-sm"
+          />
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancelEdit}>
+            Annuler
+          </Button>
+          <Button size="sm" className="h-7 text-xs gap-1" onClick={onSave}>
+            <CheckCircle className="size-3" />
+            Enregistrer
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 transition-colors hover:bg-muted/50">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="text-lg font-bold tabular-nums min-w-[52px]">
+          {schedule.time}
+        </span>
+        {renderStatusBadge(schedule.status)}
+        {schedule.status === 'delayed' && schedule.delayMinutes > 0 && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">
+            +{schedule.delayMinutes} min
+          </span>
+        )}
+        {schedule.note && (
+          <span className="text-xs text-muted-foreground truncate hidden sm:inline">
+            {schedule.note}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          onClick={onStartEdit}
+          title="Modifier"
+        >
+          <Pencil className="size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`size-7 ${schedule.status !== 'delayed' ? 'text-amber-500 hover:text-amber-600' : ''}`}
+          onClick={() => onStatusChange('delayed')}
+          title="Marquer comme retardé"
+          disabled={schedule.status === 'delayed'}
+        >
+          <AlertTriangle className="size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`size-7 ${schedule.status !== 'cancelled' ? 'text-red-500 hover:text-red-600' : ''}`}
+          onClick={() => onStatusChange('cancelled')}
+          title="Marquer comme annulé"
+          disabled={schedule.status === 'cancelled'}
+        >
+          <XCircle className="size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`size-7 ${schedule.status !== 'on_time' ? 'text-emerald-500 hover:text-emerald-600' : ''}`}
+          onClick={() => onStatusChange('on_time')}
+          title="Marquer comme à l'heure"
+          disabled={schedule.status === 'on_time'}
+        >
+          <CheckCircle className="size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 text-destructive hover:text-destructive"
+          onClick={onDelete}
+          title="Supprimer"
+        >
+          <Trash2 className="size-3" />
+        </Button>
+      </div>
     </div>
   );
 }
