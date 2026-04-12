@@ -339,6 +339,13 @@ export default function Dashboard() {
       }))
     : [];
 
+  const dailyScansChartData = data
+    ? data.dailyScans.map((d) => ({
+        date: format(new Date(d.date), 'MMM d'),
+        count: d.count,
+      }))
+    : [];
+
   const revenueChartData = data
     ? data.revenueByEvent.slice(0, 8).map((e) => ({
         name: e.eventName.length > 20 ? e.eventName.slice(0, 20) + '...' : e.eventName,
