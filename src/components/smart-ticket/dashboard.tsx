@@ -41,6 +41,8 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
+import { getRoleConfig } from '@/lib/permissions';
+import { useAppStore } from '@/store/app-store';
 import {
   Card,
   CardContent,
@@ -289,6 +291,7 @@ interface StatsData {
 // ── Main Dashboard ───────────────────────────────────────────────────
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
+  const setCurrentPage = useAppStore((s) => s.setCurrentPage);
   const [dateRange, setDateRange] = useState<DateRange>('all');
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<AnalyticsData>({
@@ -329,6 +332,37 @@ export default function Dashboard() {
     refetchInterval: 60000,
     retry: 1,
   });
+
+  // ── Role Detection ───────────────────────────────────────────
+  const userRole = user?.role || 'operator';
+  const roleInfo = getRoleConfig(userRole);
+  const isCaisse = userRole === 'caisse';
+  const isComptable = userRole === 'comptable';
+
+  // Controleur: redirect to scanner (no dashboard access)
+  if (userRole === 'controleur') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Card className="max-w-md w-full">
+          <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/30">
+              <ScanLine className="size-8 text-sky-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Accès réservé au scanner</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {roleInfo.description}
+              </p>
+            </div>
+            <Button onClick={() => setCurrentPage('scanner')} className="w-full">
+              <ScanLine className="mr-2 size-4" />
+              Aller au Scanner
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Computed metrics
   const ticketsByStatusData = data
@@ -430,11 +464,14 @@ export default function Dashboard() {
       {/* ── Header Section ──────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            {isCaisse ? 'Ventes du Jour' : isComptable ? 'Tableau de Bord Financier' : 'Dashboard'}
+          </h1>
           <p className="mt-1 text-muted-foreground text-sm">
-            Welcome back, {user?.name || 'User'}
+            {isCaisse ? `Bienvenue, ${user?.name || 'User'}` : `Welcome back, ${user?.name || 'User'}`}
           </p>
         </div>
+        {!isCaisse && (
         <div className="flex items-center gap-3">
           <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
             <SelectTrigger size="sm" className="w-[150px]">
@@ -457,6 +494,7 @@ export default function Dashboard() {
             Refresh
           </Button>
         </div>
+        )}
       </div>
 
       {/* ── Error State ─────────────────────────────────────── */}
@@ -475,10 +513,18 @@ export default function Dashboard() {
       )}
 
       {/* ── KPI Cards ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className={cn(
+        'grid gap-4',
+        isCaisse || isComptable ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5'
+      )}>
         {isLoading
-          ? Array.from({ length: 5 }).map((_, i) => <KpiCardSkeleton key={i} />)
-          : kpis.map((kpi, i) => (
+          ? Array.from({ length: isCaisse || isComptable ? 3 : 5 }).map((_, i) => <KpiCardSkeleton key={i} />)
+          : (isCaisse
+              ? kpis.filter(k => ['Total Tickets Sold', 'Total Revenue', 'Active Events'].includes(k.label))
+              : isComptable
+                ? kpis.filter(k => ['Total Revenue', 'Total Tickets Sold', 'Validation Rate'].includes(k.label))
+                : kpis
+            ).map((kpi, i) => (
               <Card key={i} className="relative overflow-hidden">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
@@ -515,7 +561,74 @@ export default function Dashboard() {
             ))}
       </div>
 
-      {/* ── Charts Section (2x2) ────────────────────────────── */}
+      {/* ── Caisse: Sell button + filtered activity ─────────── */}
+      {isCaisse && (
+        <div className="space-y-4">
+          <Button onClick={() => setCurrentPage('tickets')} size="lg" className="w-full sm:w-auto">
+            <Ticket className="mr-2 size-4" />
+            Vendre un Ticket
+          </Button>
+          {isLoading ? (
+            <TableSkeleton />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Ventes Récentes</CardTitle>
+                <CardDescription>Derniers tickets vendus aujourd&apos;hui</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {data && data.recentActivity.filter(a => a.action === 'ticket_created').length === 0 ? (
+                  <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
+                    Aucune vente aujourd&apos;hui
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[180px]">Heure</TableHead>
+                        <TableHead>Vendeur</TableHead>
+                        <TableHead>Détails</TableHead>
+                        <TableHead className="text-right">Statut</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data?.recentActivity
+                        .filter(a => a.action === 'ticket_created')
+                        .slice(0, 10)
+                        .map((activity) => (
+                          <TableRow key={activity.id}>
+                            <TableCell className="text-muted-foreground text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="size-3" />
+                                {formatTime(activity.createdAt)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm font-medium">
+                              {activity.user?.name || 'System'}
+                            </TableCell>
+                            <TableCell className="max-w-[250px] truncate text-muted-foreground text-xs">
+                              {activity.details || '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                                <CheckCircle2 className="mr-1 size-3" />
+                                Vendu
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ── Admin / Comptable: Charts, Tables, Footer ───────── */}
+      {!isCaisse && (<>
+      {/* ── Charts Section ──────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Ticket Sales Trend (Area Chart) */}
         {isLoading ? (
@@ -686,6 +799,8 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {/* Admin only: Hourly Traffic + Ticket Type ──────────── */}
+        {!isComptable && (<>
         {/* Hourly Traffic (Bar Chart) */}
         {isLoading ? (
           <ChartSkeleton />
@@ -762,9 +877,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+        </>)}
       </div>
 
-      {/* ── Tables Section ──────────────────────────────────── */}
+      {/* ── Tables Section (admin only) ─────────────────────── */}
+      {!isComptable && (
       <Tabs defaultValue="recent-activity" className="space-y-4">
         <TabsList>
           <TabsTrigger value="recent-activity">Recent Activity</TabsTrigger>
@@ -924,9 +1041,63 @@ export default function Dashboard() {
           )}
         </TabsContent>
       </Tabs>
+      )}
 
-      {/* ── Quick Stats Footer ──────────────────────────────── */}
-      {!isLoading && data && (
+      {/* ── Comptable: Revenue by Event Table ───────────────── */}
+      {isComptable && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Revenus par Événement</CardTitle>
+            <CardDescription>Événements classés par revenus totaux générés</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {data && data.revenueByEvent.length === 0 ? (
+              <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
+                Aucun événement avec des revenus
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40px]">#</TableHead>
+                    <TableHead>Nom de l&apos;événement</TableHead>
+                    <TableHead className="text-right">Revenus</TableHead>
+                    <TableHead className="text-right">Statut</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data?.revenueByEvent.map((event, index) => (
+                    <TableRow key={event.eventId}>
+                      <TableCell className="font-medium text-muted-foreground">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950">
+                            <Calendar className="size-4 text-emerald-600" />
+                          </div>
+                          <span className="truncate">{event.eventName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatCurrency(event.revenue)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                          Actif
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Quick Stats Footer (admin only) ──────────────────── */}
+      {!isComptable && !isLoading && data && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Card className="p-4">
             <div className="flex items-center gap-3">
@@ -973,6 +1144,8 @@ export default function Dashboard() {
             </div>
           </Card>
         </div>
+      )}
+      </>
       )}
     </div>
   );

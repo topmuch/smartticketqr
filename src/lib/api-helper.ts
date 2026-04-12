@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, type JWTPayload } from '@/lib/auth';
+import { PERMISSION_MATRIX, type Permission } from './permissions';
 
 // ============================================================
 // 🔐 TENANT ISOLATION MIDDLEWARE
@@ -232,4 +233,48 @@ export function checkSubscriptionLimit(
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter;
   const limit = limits[limitType];
   return { allowed: current < limit, limit };
+}
+
+// ============================================================
+// RBAC PERMISSION CHECK
+// ============================================================
+
+/**
+ * Check if a tenant has a specific permission.
+ * Super admin always has all permissions.
+ * Client roles are checked against the PERMISSION_MATRIX.
+ */
+export function requirePermission(
+  tenant: TenantContext,
+  permission: Permission
+): TenantContext | NextResponse {
+  // Super admin bypasses all permission checks
+  if (tenant.role === 'super_admin') return tenant;
+
+  // Check if role has the required permission
+  const rolePermissions = PERMISSION_MATRIX[tenant.role as keyof typeof PERMISSION_MATRIX];
+  if (!rolePermissions || !rolePermissions.includes(permission)) {
+    return errorResponse(`Permission denied: ${permission} required`, 403);
+  }
+
+  return tenant;
+}
+
+/**
+ * Check if a tenant has any of the specified permissions.
+ * Returns tenant if at least one permission is granted.
+ */
+export function requireAnyPermission(
+  tenant: TenantContext,
+  permissions: Permission[]
+): TenantContext | NextResponse {
+  // Super admin bypasses all permission checks
+  if (tenant.role === 'super_admin') return tenant;
+
+  const rolePermissions = PERMISSION_MATRIX[tenant.role as keyof typeof PERMISSION_MATRIX];
+  if (!rolePermissions || !permissions.some((p) => rolePermissions.includes(p))) {
+    return errorResponse(`Permission denied: one of [${permissions.join(', ')}] required`, 403);
+  }
+
+  return tenant;
 }

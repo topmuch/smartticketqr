@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requirePermission } from '@/lib/api-helper';
 import { generateTicketCode } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -57,6 +57,10 @@ export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
     const tenant = resolveTenant(request);
     if (isErrorResponse(tenant)) return tenant;
+
+    // RBAC: Only admin and caisse can create/sell tickets
+    const permCheck = requirePermission(tenant, 'tickets.sell');
+    if (isErrorResponse(permCheck)) return permCheck;
 
     const body = await request.json();
     const { eventId, ticketType, holderName, holderEmail, holderPhone, seatNumber, price, currency } = body;

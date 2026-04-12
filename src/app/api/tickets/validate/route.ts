@@ -14,7 +14,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, requirePermission } from '@/lib/api-helper';
 import { validateQRPayload, validateTicketCode } from '@/lib/ticket-generator';
 import { validateScanLocation } from '@/lib/geo-validator';
 import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limiter';
@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
     // Step 2: Tenant resolution
     const tenant = resolveTenant(request);
     if (isErrorResponse(tenant)) return tenant;
+
+    // Step 2.5: RBAC - Only admin and controleur can validate tickets
+    const permCheck = requirePermission(tenant, 'scanner.use');
+    if (isErrorResponse(permCheck)) return permCheck;
 
     // Step 3: Parse request body
     const body = await request.json();

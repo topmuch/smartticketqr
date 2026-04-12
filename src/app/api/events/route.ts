@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, requirePermission, tenantWhereWith } from '@/lib/api-helper';
 import { checkLimit } from '@/lib/subscription-manager';
 
 export async function GET(request: NextRequest) {
@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
     const tenant = resolveTenant(request);
     if (isErrorResponse(tenant)) return tenant;
 
-    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
+    // RBAC: Only admin can create events
+    const roleCheck = requirePermission(tenant, 'events.create');
     if (isErrorResponse(roleCheck)) return roleCheck;
 
     const body = await request.json();

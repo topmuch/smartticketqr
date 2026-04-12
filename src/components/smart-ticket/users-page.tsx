@@ -19,9 +19,12 @@ import {
   ChevronRight,
   Mail,
   Calendar,
+  Check,
+  X,
+  Info,
 } from 'lucide-react';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -59,9 +62,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
 import { useAppStore } from '@/store/app-store';
+import {
+  type ClientRole,
+  ROLE_CONFIG,
+  CLIENT_ROLES,
+  PERMISSION_MATRIX,
+  PERMISSION_LABELS,
+  hasPermission,
+  type Permission,
+} from '@/lib/permissions';
 
 interface UserRecord {
   id: string;
@@ -97,26 +110,6 @@ function getApiHeaders() {
   };
 }
 
-const roleConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  super_admin: {
-    label: 'Super Admin',
-    color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-    icon: <ShieldCheck className="h-3 w-3" />,
-  },
-  admin: {
-    label: 'Admin',
-    color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-    icon: <Shield className="h-3 w-3" />,
-  },
-  operator: {
-    label: 'Operator',
-    color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
-    icon: <Eye className="h-3 w-3" />,
-  },
-};
-
-const ROLES = ['super_admin', 'admin', 'operator'];
-
 export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -127,17 +120,20 @@ export default function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<UserRecord | null>(null);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [upgradeLimitInfo, setUpgradeLimitInfo] = useState({ limit: 0, label: 'utilisateurs' });
+  const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
+  const [selectedPermRole, setSelectedPermRole] = useState<ClientRole>('admin');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'operator',
+    role: 'operator' as string,
   });
   const queryClient = useQueryClient();
 
   const currentUser = useAuthStore.getState().user;
   const isSuperAdmin = currentUser?.role === 'super_admin';
-  const canManageUsers = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin';
+  const canManageUsers = isSuperAdmin || isAdmin;
 
   // Fetch users
   const { data: usersData, isLoading } = useQuery<UsersResponse>({
@@ -170,7 +166,7 @@ export default function UsersPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast.success('User created successfully');
+      toast.success('Utilisateur créé avec succès');
       setDialogOpen(false);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -182,7 +178,7 @@ export default function UsersPage() {
         setUpgradeLimitInfo({ limit: error.limit || 0, label: 'utilisateurs' });
         setShowUpgradeDialog(true);
       } else {
-        toast.error('Failed to create user', { description: error.message });
+        toast.error('Échec de la création', { description: error.message });
       }
     },
   });
@@ -202,14 +198,14 @@ export default function UsersPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast.success('User updated successfully');
+      toast.success('Utilisateur mis à jour');
       setDialogOpen(false);
       setEditUser(null);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error) => {
-      toast.error('Failed to update user', { description: error.message });
+      toast.error('Échec de la mise à jour', { description: error.message });
     },
   });
 
@@ -227,13 +223,13 @@ export default function UsersPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast.success('User deactivated successfully');
+      toast.success('Utilisateur désactivé');
       setDeleteDialogOpen(false);
       setUserToDelete(null);
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error) => {
-      toast.error('Failed to deactivate user', { description: error.message });
+      toast.error('Échec de la désactivation', { description: error.message });
     },
   });
 
@@ -265,17 +261,28 @@ export default function UsersPage() {
 
   const handleSubmit = () => {
     if (!formData.name || !formData.email) {
-      toast.error('Name and email are required');
+      toast.error('Le nom et l\'email sont obligatoires');
       return;
     }
 
     if (editUser) {
       const updateData: Record<string, string | boolean> = { name: formData.name, email: formData.email };
-      if (formData.role && isSuperAdmin) updateData.role = formData.role;
+      // Admin can change roles of other admin-level users (not super_admin)
+      if (formData.role && (isSuperAdmin || isAdmin)) updateData.role = formData.role;
+      // Don't allow changing role to super_admin unless current user is super_admin
+      if (formData.role === 'super_admin' && !isSuperAdmin) {
+        toast.error('Seul un Super Admin peut attribuer ce rôle');
+        return;
+      }
       updateMutation.mutate({ id: editUser.id, data: updateData });
     } else {
       if (!formData.password) {
-        toast.error('Password is required for new users');
+        toast.error('Le mot de passe est obligatoire pour les nouveaux utilisateurs');
+        return;
+      }
+      // Don't allow creating super_admin unless current user is super_admin
+      if (formData.role === 'super_admin' && !isSuperAdmin) {
+        toast.error('Seul un Super Admin peut créer ce rôle');
         return;
       }
       createMutation.mutate(formData);
@@ -298,7 +305,9 @@ export default function UsersPage() {
     return {
       total: usersData?.total || 0,
       admins: users.filter((u) => u.role === 'admin' || u.role === 'super_admin').length,
-      operators: users.filter((u) => u.role === 'operator').length,
+      cashiers: users.filter((u) => u.role === 'caisse').length,
+      controllers: users.filter((u) => u.role === 'controleur').length,
+      accountants: users.filter((u) => u.role === 'comptable').length,
       active: users.filter((u) => u.isActive).length,
     };
   }, [usersData]);
@@ -307,12 +316,27 @@ export default function UsersPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <Shield className="h-16 w-16 text-muted-foreground/30 mb-4" />
-        <h3 className="text-lg font-semibold">Access Denied</h3>
+        <h3 className="text-lg font-semibold">Accès refusé</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          You need admin or super admin privileges to manage users.
+          Vous devez être administrateur pour gérer l&apos;équipe.
         </p>
       </div>
     );
+  }
+
+  // Get role config safely
+  function getRoleBadge(role: string) {
+    const config = ROLE_CONFIG[role];
+    if (config) {
+      return (
+        <Badge variant="outline" className={`${config.bgColor} ${config.color} border-transparent text-xs gap-1`}>
+          <span className="hidden sm:inline">{config.emoji}</span>
+          <span className="hidden sm:inline">{config.labelFr}</span>
+          <span className="sm:hidden">{config.label.slice(0, 3)}</span>
+        </Badge>
+      );
+    }
+    return <Badge variant="outline" className="text-xs">{role}</Badge>;
   }
 
   return (
@@ -322,61 +346,94 @@ export default function UsersPage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Users className="h-7 w-7 text-orange-500" />
-            User Management
+            Gérer l&apos;Équipe
           </h2>
-          <p className="text-muted-foreground">Manage system users and their roles</p>
+          <p className="text-muted-foreground">
+            Gérez les membres de votre équipe et attribuez les rôles
+          </p>
         </div>
-        {isSuperAdmin && (
-          <Button onClick={handleOpenCreate}>
-            <UserPlus className="h-4 w-4 mr-1.5" />
-            Add User
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => {
+            setSelectedPermRole('admin');
+            setShowPermissionsDialog(true);
+          }}>
+            <Info className="h-4 w-4 mr-1.5" />
+            Matrice des permissions
           </Button>
-        )}
+          {(isSuperAdmin || isAdmin) && (
+            <Button onClick={handleOpenCreate}>
+              <UserPlus className="h-4 w-4 mr-1.5" />
+              Ajouter un membre
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-              <Users className="h-5 w-5 text-muted-foreground" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center">
+              <Users className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.total}</p>
-              <p className="text-xs text-muted-foreground">Total Users</p>
+              <p className="text-lg font-bold">{stats.total}</p>
+              <p className="text-[10px] text-muted-foreground">Total</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-              <ShieldCheck className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+              <ShieldCheck className="h-4 w-4 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.admins}</p>
-              <p className="text-xs text-muted-foreground">Admins</p>
+              <p className="text-lg font-bold">{stats.admins}</p>
+              <p className="text-[10px] text-muted-foreground">Admins</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center">
-              <Eye className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+              <span className="text-base">💰</span>
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.operators}</p>
-              <p className="text-xs text-muted-foreground">Operators</p>
+              <p className="text-lg font-bold">{stats.cashiers}</p>
+              <p className="text-[10px] text-muted-foreground">Caisses</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center">
+              <span className="text-base">📱</span>
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.active}</p>
-              <p className="text-xs text-muted-foreground">Active</p>
+              <p className="text-lg font-bold">{stats.controllers}</p>
+              <p className="text-[10px] text-muted-foreground">Contrôleurs</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <span className="text-base">📊</span>
+            </div>
+            <div>
+              <p className="text-lg font-bold">{stats.accountants}</p>
+              <p className="text-[10px] text-muted-foreground">Comptables</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-lg font-bold">{stats.active}</p>
+              <p className="text-[10px] text-muted-foreground">Actifs</p>
             </div>
           </div>
         </Card>
@@ -389,21 +446,23 @@ export default function UsersPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name or email..."
+                placeholder="Rechercher par nom ou email..."
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-9"
               />
             </div>
             <Select value={roleFilter} onValueChange={handleRoleFilter}>
-              <SelectTrigger className="w-full sm:w-[160px]">
-                <SelectValue placeholder="Filter by role" />
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Filtrer par rôle" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="super_admin">Super Admin</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="operator">Operator</SelectItem>
+                <SelectItem value="all">Tous les rôles</SelectItem>
+                <SelectItem value="admin">👑 Admin</SelectItem>
+                <SelectItem value="caisse">💰 Caisse</SelectItem>
+                <SelectItem value="controleur">📱 Contrôleur</SelectItem>
+                <SelectItem value="comptable">📊 Comptable</SelectItem>
+                {isSuperAdmin && <SelectItem value="super_admin">👑 Super Admin</SelectItem>}
               </SelectContent>
             </Select>
           </div>
@@ -431,93 +490,86 @@ export default function UsersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4">User</TableHead>
+                    <TableHead className="pl-4">Membre</TableHead>
                     <TableHead className="hidden sm:table-cell">Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="hidden md:table-cell">Status</TableHead>
-                    <TableHead className="hidden lg:table-cell">Joined</TableHead>
+                    <TableHead>Rôle</TableHead>
+                    <TableHead className="hidden md:table-cell">Statut</TableHead>
+                    <TableHead className="hidden lg:table-cell">Rejoint</TableHead>
                     <TableHead className="hidden sm:table-cell">Scans</TableHead>
                     <TableHead className="pr-4 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {usersData.data.map((user) => {
-                    const rc = roleConfig[user.role] || roleConfig.operator;
-                    return (
-                      <TableRow key={user.id}>
-                        <TableCell className="pl-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="text-xs font-medium bg-muted">
-                                {user.name
-                                  .split(' ')
-                                  .map((n) => n[0])
-                                  .join('')
-                                  .toUpperCase()
-                                  .slice(0, 2)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="text-sm font-medium">{user.name}</p>
-                              <p className="text-xs text-muted-foreground sm:hidden">{user.email}</p>
-                            </div>
+                  {usersData.data.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="pl-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="text-xs font-medium bg-muted">
+                              {user.name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .toUpperCase()
+                                .slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="text-sm font-medium">{user.name}</p>
+                            <p className="text-xs text-muted-foreground sm:hidden">{user.email}</p>
                           </div>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                            <Mail className="h-3.5 w-3.5" />
-                            {user.email}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`${rc.color} border-transparent text-xs`}>
-                            {rc.icon}
-                            <span className="ml-1 hidden sm:inline">{rc.label}</span>
-                            <span className="ml-1 sm:hidden">{user.role === 'super_admin' ? 'SA' : user.role === 'admin' ? 'Ad' : 'Op'}</span>
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <Badge variant={user.isActive ? 'default' : 'secondary'} className="text-xs">
-                            {user.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                          {format(new Date(user.createdAt), 'MMM d, yyyy')}
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                          {user._count.scans}
-                        </TableCell>
-                        <TableCell className="pr-4 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Open menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleOpenEdit(user)}>
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              {isSuperAdmin && user.role !== 'super_admin' && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenDelete(user)}
-                                    className="text-red-600 focus:text-red-600"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Deactivate
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <Mail className="h-3.5 w-3.5" />
+                          {user.email}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getRoleBadge(user.role)}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge variant={user.isActive ? 'default' : 'secondary'} className="text-xs">
+                          {user.isActive ? 'Actif' : 'Inactif'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                        {format(new Date(user.createdAt), 'd MMM yyyy')}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                        {user._count.scans}
+                      </TableCell>
+                      <TableCell className="pr-4 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenEdit(user)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Modifier
+                            </DropdownMenuItem>
+                            {user.role !== 'super_admin' && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenDelete(user)}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Désactiver
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
 
@@ -525,7 +577,7 @@ export default function UsersPage() {
               {usersData.totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                   <p className="text-sm text-muted-foreground">
-                    Page {usersData.page} of {usersData.totalPages} ({usersData.total} users)
+                    Page {usersData.page} sur {usersData.totalPages} ({usersData.total} membres)
                   </p>
                   <div className="flex gap-1">
                     <Button
@@ -535,7 +587,6 @@ export default function UsersPage() {
                       onClick={() => setPage((p) => p - 1)}
                     >
                       <ChevronLeft className="h-4 w-4" />
-                      <span className="sr-only sm:not-sr-only sm:ml-1">Previous</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -543,7 +594,6 @@ export default function UsersPage() {
                       disabled={page >= usersData.totalPages}
                       onClick={() => setPage((p) => p + 1)}
                     >
-                      <span className="sr-only sm:not-sr-only sm:mr-1">Next</span>
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -553,13 +603,11 @@ export default function UsersPage() {
           ) : (
             <div className="text-center py-12">
               <Users className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No users found</p>
+              <p className="text-sm text-muted-foreground">Aucun membre trouvé</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {search || roleFilter !== 'all'
-                  ? 'Try adjusting your filters'
-                  : isSuperAdmin
-                  ? 'Click "Add User" to create one'
-                  : 'Users will appear here once created'}
+                  ? 'Ajustez vos filtres'
+                  : 'Cliquez "Ajouter un membre" pour commencer'}
               </p>
             </div>
           )}
@@ -576,19 +624,19 @@ export default function UsersPage() {
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editUser ? 'Edit User' : 'Create User'}</DialogTitle>
+            <DialogTitle>{editUser ? 'Modifier le membre' : 'Ajouter un membre'}</DialogTitle>
             <DialogDescription>
               {editUser
-                ? 'Update user information and role.'
-                : 'Add a new user to the system. They will receive their credentials via email.'}
+                ? 'Modifiez les informations et le rôle du membre.'
+                : 'Ajoutez un nouveau membre à votre équipe.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">Nom complet</Label>
               <Input
                 id="name"
-                placeholder="Full name"
+                placeholder="Ex: Amadou Diallo"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
               />
@@ -598,61 +646,167 @@ export default function UsersPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="email@example.com"
+                placeholder="email@exemple.com"
                 value={formData.email}
                 onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
               />
             </div>
             {!editUser && (
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Mot de passe</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Min. 6 characters"
+                  placeholder="Min. 6 caractères"
                   value={formData.password}
                   onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                 />
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
+              <Label htmlFor="role">Rôle</Label>
               <Select
                 value={formData.role}
                 onValueChange={(value) => setFormData((prev) => ({ ...prev, role: value }))}
-                disabled={!isSuperAdmin}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue placeholder="Sélectionner un rôle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="operator">Operator</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                  <SelectItem value="admin">
+                    <span className="flex items-center gap-2">
+                      <span>👑</span> Admin — Accès complet
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="caisse">
+                    <span className="flex items-center gap-2">
+                      <span>💰</span> Caisse — Vente de tickets
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="controleur">
+                    <span className="flex items-center gap-2">
+                      <span>📱</span> Contrôleur — Scan & Validation
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="comptable">
+                    <span className="flex items-center gap-2">
+                      <span>📊</span> Comptable — Revenus & Rapports
+                    </span>
+                  </SelectItem>
+                  {isSuperAdmin && (
+                    <SelectItem value="super_admin">
+                      <span className="flex items-center gap-2">
+                        <span>👑</span> Super Admin
+                      </span>
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
-              {!isSuperAdmin && (
-                <p className="text-xs text-muted-foreground">
-                  Only super admins can change roles.
+              {/* Role description */}
+              {formData.role && ROLE_CONFIG[formData.role] && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {ROLE_CONFIG[formData.role].description}
                 </p>
               )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
+              Annuler
             </Button>
             <Button
               onClick={handleSubmit}
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               {createMutation.isPending || updateMutation.isPending
-                ? 'Saving...'
+                ? 'Enregistrement...'
                 : editUser
-                ? 'Update User'
-                : 'Create User'}
+                ? 'Mettre à jour'
+                : 'Créer'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permission Matrix Dialog */}
+      <Dialog open={showPermissionsDialog} onOpenChange={setShowPermissionsDialog}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Matrice des Permissions RBAC
+            </DialogTitle>
+            <DialogDescription>
+              Visualisez les accès de chaque rôle dans le système
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={selectedPermRole} onValueChange={(v) => setSelectedPermRole(v as ClientRole)}>
+            <TabsList className="grid grid-cols-4 w-full">
+              {CLIENT_ROLES.map((role) => (
+                <TabsTrigger key={role} value={role} className="text-xs">
+                  {ROLE_CONFIG[role].emoji} {ROLE_CONFIG[role].labelFr.split(' ')[0]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {CLIENT_ROLES.map((role) => (
+              <TabsContent key={role} value={role} className="mt-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Badge className={`${ROLE_CONFIG[role].bgColor} ${ROLE_CONFIG[role].color} border-transparent text-sm`}>
+                      {ROLE_CONFIG[role].emoji} {ROLE_CONFIG[role].labelFr}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {PERMISSION_MATRIX[role].length} permissions
+                    </span>
+                  </div>
+
+                  {/* Group permissions by category */}
+                  {[
+                    { title: '📊 Dashboard', perms: ['dashboard.view', 'dashboard.view_sales', 'dashboard.view_revenue'] },
+                    { title: '🎫 Tickets', perms: ['tickets.create', 'tickets.view', 'tickets.edit', 'tickets.delete', 'tickets.sell'] },
+                    { title: '📱 Scanner', perms: ['scanner.use', 'scanner.view_logs'] },
+                    { title: '📅 Événements', perms: ['events.view', 'events.create', 'events.edit', 'events.delete', 'lines.manage'] },
+                    { title: '💰 Finance', perms: ['transactions.view', 'transactions.view_own', 'transactions.export', 'reports.view', 'reports.export'] },
+                    { title: '👥 Équipe', perms: ['team.view', 'team.create', 'team.edit', 'team.delete'] },
+                    { title: '🖥️ Affichage', perms: ['display.view', 'display.manage'] },
+                    { title: '⚙️ Paramètres', perms: ['settings.view', 'settings.edit', 'api_keys.manage', 'webhooks.manage'] },
+                    { title: '📋 Logs', perms: ['logs.activity', 'logs.scan'] },
+                    { title: '🗑️ Données', perms: ['data.delete'] },
+                  ].map((group) => (
+                    <div key={group.title}>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">{group.title}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                        {group.perms.map((perm) => {
+                          const label = PERMISSION_LABELS[perm];
+                          const has = hasPermission(role, perm as Permission);
+                          return (
+                            <div
+                              key={perm}
+                              className={`flex items-center gap-2 text-xs rounded-md px-2 py-1.5 ${
+                                has
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-muted/50 text-muted-foreground/50 line-through'
+                              }`}
+                            >
+                              {has ? (
+                                <Check className="h-3 w-3 shrink-0" />
+                              ) : (
+                                <X className="h-3 w-3 shrink-0" />
+                              )}
+                              <span className="truncate">{label?.label || perm}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <Separator className="my-2" />
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
         </DialogContent>
       </Dialog>
 
@@ -669,15 +823,6 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => setShowUpgradeDialog(false)}>
               Fermer
             </Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={() => {
-                setShowUpgradeDialog(false);
-                useAppStore.getState().setCurrentPage('billing');
-              }}
-            >
-              Mettre à niveau
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -686,23 +831,23 @@ export default function UsersPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Deactivate User</DialogTitle>
+            <DialogTitle>Désactiver le membre</DialogTitle>
             <DialogDescription>
-              Are you sure you want to deactivate{' '}
-              <strong>{userToDelete?.name}</strong>? They will no longer be able to access the system.
-              This action can be reversed by an administrator.
+              Êtes-vous sûr de vouloir désactiver{' '}
+              <strong>{userToDelete?.name}</strong> ? Il ne pourra plus accéder au système.
+              Cette action peut être annulée par un administrateur.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              Annuler
             </Button>
             <Button
               variant="destructive"
               onClick={() => userToDelete && deactivateMutation.mutate(userToDelete.id)}
               disabled={deactivateMutation.isPending}
             >
-              {deactivateMutation.isPending ? 'Deactivating...' : 'Deactivate'}
+              {deactivateMutation.isPending ? 'Désactivation...' : 'Désactiver'}
             </Button>
           </DialogFooter>
         </DialogContent>

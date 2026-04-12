@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requireTenantRole, tenantWhereWith } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, parsePagination, requirePermission, tenantWhereWith } from '@/lib/api-helper';
 import { checkLimit } from '@/lib/subscription-manager';
 import { hashPassword } from '@/lib/auth';
 
@@ -9,8 +9,9 @@ export async function GET(request: NextRequest) {
     const tenant = resolveTenant(request);
     if (isErrorResponse(tenant)) return tenant;
 
-    const roleCheck = requireTenantRole(request, 'super_admin', 'admin');
-    if (isErrorResponse(roleCheck)) return roleCheck;
+    // RBAC: Only admin can view/manage team
+    const permCheck = requirePermission(tenant, 'team.view');
+    if (isErrorResponse(permCheck)) return permCheck;
 
     const { searchParams } = new URL(request.url);
     const { page, limit } = parsePagination(searchParams);
@@ -70,14 +71,23 @@ export async function POST(request: NextRequest) {
     const tenant = resolveTenant(request);
     if (isErrorResponse(tenant)) return tenant;
 
-    const roleCheck = requireTenantRole(request, 'super_admin');
-    if (isErrorResponse(roleCheck)) return roleCheck;
+    // RBAC: Only admin can create team members
+    const permCheck = requirePermission(tenant, 'team.create');
+    if (isErrorResponse(permCheck)) return permCheck;
 
     const body = await request.json();
     const { name, email, password, role } = body;
 
     if (!name || !email || !password) {
       return corsResponse({ error: 'Name, email, and password are required' }, 400);
+    }
+
+    // Validate role is allowed
+    const allowedRoles = tenant.role === 'super_admin'
+      ? ['super_admin', 'admin', 'caisse', 'controleur', 'comptable', 'operator']
+      : ['admin', 'caisse', 'controleur', 'comptable', 'operator'];
+    if (role && !allowedRoles.includes(role)) {
+      return corsResponse({ error: `Invalid role. Allowed: ${allowedRoles.join(', ')}` }, 400);
     }
 
     // Check subscription limit for users
