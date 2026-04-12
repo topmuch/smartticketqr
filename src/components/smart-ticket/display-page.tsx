@@ -360,9 +360,13 @@ export default function DisplayPage() {
   // ── Copy link ────────────────────────────────────────────────────────────
 
   function handleCopyLink(config: DisplayConfigFull) {
-    const url = `${window.location.origin}/display?configId=${config.id}`;
+    if (!config.isPublic) {
+      toast.error('Activez l\'accès public dans les paramètres de l\'écran pour obtenir un lien partageable');
+      return;
+    }
+    const url = `${window.location.origin}/?configId=${config.id}`;
     navigator.clipboard.writeText(url).then(() => {
-      toast.success('Lien copié dans le presse-papier');
+      toast.success('Lien public copié — ouvrez-le sur un écran ou une TV');
     }).catch(() => {
       toast.error('Impossible de copier le lien');
     });

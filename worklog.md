@@ -333,3 +333,36 @@ Stage Summary:
 - All 10 TypeScript/ESLint issues fixed with minimal, targeted changes
 - `bun run lint` passes with zero errors
 - Files modified: events-page.tsx, i18n/index.tsx, forgot-password/route.ts, login/route.ts, contact/route.ts, ticket/public/route.ts, fraud-alerts-page.tsx, offline-sync/route.ts, dashboard.tsx, tickets-page.tsx, affiliates-page.tsx, api-keys-page.tsx, custom-domains-page.tsx, api-keys/route.ts, api-key-auth.ts, login-page.tsx
+---
+Task ID: 1
+Agent: main
+Task: Complete Dynamic Display module - public kiosk page
+
+Work Log:
+- Read all existing display module files (display-kiosk.tsx, display-templates.tsx, display-page.tsx, API routes)
+- Added CSS keyframe animations (slideInRight, scaleIn, fadeIn) to globals.css for template transitions
+- Created src/components/smart-ticket/public-display.tsx - standalone public kiosk component
+  - Fetches data from /api/display/screens?configId=xxx (no auth required)
+  - Renders all 5 templates directly (bypasses DisplayKiosk auth-dependent endpoints)
+  - WebSocket connection for real-time updates via Socket.IO port 3004
+  - Auto-refresh every 15s as fallback
+  - Loading state, error state with retry button, and SmartTicketQR watermark
+  - Connection indicator (En direct / Reconnexion)
+- Updated src/app/page.tsx to detect ?configId= query param
+  - When configId is present, renders PublicDisplay without authentication
+  - All React hooks called before early returns (fixed lint error)
+  - Auth token validation skipped when in public display mode
+- Updated src/components/smart-ticket/display-page.tsx copy link function
+  - Changed URL from /display?configId= to /?configId= (SPA root)
+  - Added isPublic check with toast error if not public
+  - Improved toast message
+
+Stage Summary:
+- Dynamic Display module is now 100% complete with public kiosk access
+- Public URL format: /?configId=<uuid>
+- Admin can copy public link, user opens in browser on TV/monitor
+- No authentication required for public displays
+- All 5 templates render correctly (kiosk, compact, full, queue, transport)
+- Real-time updates via WebSocket + 15s polling fallback
+- Lint passes clean, no compilation errors
+

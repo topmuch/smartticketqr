@@ -37,6 +37,7 @@ import LandingContactPage from '@/components/landing/contact-page';
 import LandingPrivacyPage from '@/components/landing/privacy-page';
 import LandingLoginPage from '@/components/landing/landing-login';
 import LandingRegisterPage from '@/components/landing/landing-register';
+import PublicDisplay from '@/components/smart-ticket/public-display';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
   login: LoginPage,
@@ -79,9 +80,21 @@ export default function Home() {
   const { currentPage, setCurrentPage } = useAppStore();
   const { currentLandingPage } = useLandingStore();
 
+  // ── Public display kiosk mode (no auth required) ────────────────────────
+  // When ?configId=xxx is present, render the public kiosk display directly
+  const [publicConfigId, setPublicConfigId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const configId = params.get('configId');
+    if (configId) {
+      setPublicConfigId(configId);
+    }
+  }, []);
+
   // Verify token validity on mount
   useEffect(() => {
-    if (isAuthenticated && token) {
+    if (isAuthenticated && token && !publicConfigId) {
       // Check if token is still valid
       fetch('/api/auth/me', {
         headers: {
@@ -99,7 +112,14 @@ export default function Home() {
           // Network error, keep user logged in for offline support
         });
     }
-  }, [isAuthenticated, token, setCurrentPage]);
+  }, [isAuthenticated, token, setCurrentPage, publicConfigId]);
+
+  // ── Early returns (after all hooks) ──────────────────────────────────────
+
+  // Public kiosk mode: bypass auth entirely
+  if (publicConfigId) {
+    return <PublicDisplay configId={publicConfigId} />;
+  }
 
   // Redirect to landing pages when not authenticated
   if (!isAuthenticated || !user) {
