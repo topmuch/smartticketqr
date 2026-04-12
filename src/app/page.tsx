@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { useAppStore, type PageName } from '@/store/app-store';
-import LoginPage from '@/components/smart-ticket/login-page';
+import LandingPage from '@/components/landing/landing-page';
 import AppShell from '@/components/smart-ticket/app-shell';
 import Dashboard from '@/components/smart-ticket/dashboard';
 import EventsPage from '@/components/smart-ticket/events-page';
@@ -27,7 +27,6 @@ import SupportPage from '@/components/smart-ticket/support-page';
 import AffiliatesPage from '@/components/smart-ticket/affiliates-page';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
-  login: LoginPage,
   dashboard: Dashboard,
   events: EventsPage,
   tickets: TicketsPage,
@@ -57,7 +56,6 @@ export default function Home() {
   // Verify token validity on mount
   useEffect(() => {
     if (isAuthenticated && token) {
-      // Check if token is still valid
       fetch('/api/auth/me', {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -67,7 +65,7 @@ export default function Home() {
         .then((res) => {
           if (!res.ok) {
             useAuthStore.getState().logout();
-            setCurrentPage('login');
+            setCurrentPage('dashboard');
           }
         })
         .catch(() => {
@@ -76,9 +74,9 @@ export default function Home() {
     }
   }, [isAuthenticated, token, setCurrentPage]);
 
-  // Redirect to login if not authenticated
+  // Show landing page for unauthenticated visitors
   if (!isAuthenticated || !user) {
-    return <LoginPage />;
+    return <LandingPage />;
   }
 
   // Get the current page component

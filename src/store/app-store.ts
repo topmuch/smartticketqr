@@ -35,7 +35,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      currentPage: 'login',
+      currentPage: 'dashboard',
       sidebarOpen: true,
       setCurrentPage: (page) => set({ currentPage: page }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
