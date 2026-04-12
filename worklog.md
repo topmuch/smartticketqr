@@ -350,3 +350,121 @@ Stage Summary:
 - PDF download, WhatsApp share, QR download, Copy all functional
 - ESLint: 0 errors, 0 warnings
 - Dev server: compiles and renders successfully
+---
+Task ID: 1
+Agent: general-purpose
+Task: Implement PDF download with jsPDF in public ticket view
+
+Work Log:
+- Added `import jsPDF from 'jspdf'` at top of public-ticket-view.tsx (line 6)
+- Replaced old print-window hack `handleDownloadPDF` with proper jsPDF implementation
+- PDF layout: A4 portrait, centered ticket with org-branded border and rounded corners
+- Org header bar: filled rounded rect with org color (hex→RGB via parseInt), org name bold 18px, "SmartTicketQR" subtitle
+- Dashed line separators (setLineDashPattern [3,3]) between all sections for ticket-like look
+- Event section: centered event name (17px bold), date/time (dd MMM yyyy - HH:mm via date-fns format), location
+- Holder section: PASSAGER label (9px gray uppercase), holder name (14px bold), conditional seat number
+- Status badge: auto-sized rounded rect with org color fill, white text from getStatusConfig().label
+- Ticket code: "CODE BILLET" label + code in Courier Bold 22px with org color
+- Price: 24px bold centered (currency + amount)
+- QR code: 38×38mm PNG from data.qrImage base64, centered with try/catch fallback
+- Footer: italic 8px disclaimer + generation timestamp
+- Outer border: solid 0.8mm rounded rect in org color enclosing entire ticket
+- Filename: `ticket-${data.ticket.code}.pdf` via doc.save()
+- ESLint: 0 errors, 0 warnings
+- All other code in the file untouched
+
+Stage Summary:
+- PDF download now generates a real PDF file client-side using jsPDF (no print window hack)
+- Professional branded layout with org colors, dashed separators, QR code, status badge
+- File: /src/components/smart-ticket/public-ticket-view.tsx (665 lines, jsPDF handler lines 226-401)
+---
+Task ID: 4
+Agent: general-purpose
+Task: Dashboard i18n integration — replace all hardcoded strings with useTranslation() calls
+
+Work Log:
+- Read dashboard.tsx (1152 lines) — identified 60+ hardcoded English/French strings
+- Read i18n/index.tsx — confirmed useTranslation() hook returns { t, locale, setLocale }
+- Read translations.ts — confirmed existing dashboard.* keys and common.* keys
+- Added 67 new translation keys to translations.ts under dashboard.* namespace for ALL 4 locales (fr, en, pt, es)
+  - Role-specific titles: caisseTitle, comptableTitle, scannerOnly, goToScanner
+  - KPI labels reused existing keys; added trendVsLastPeriod, currentlyRunning, vsYesterday, usedOverActive
+  - Chart titles: ticketSalesTrend, revenueByEvent, dailyRevenue, ticketStatus, hourlyTraffic, ticketTypes
+  - Chart descriptions: scanActivity, topEventsRevenue, revenueTrend, statusBreakdown, scanVolume, typeDistribution
+  - Empty states: noScanData, noRevenueData, noStatusData, noTrafficData, noTypeData, noRecentActivity, noEventsRevenue, noSalesToday, comptableNoEvents
+  - Table headers: time, user, system, action, result, details, eventName, type, event, revenue, status, seller
+  - Badge labels: badgeValid, badgeInvalid, badgeExpired, badgeDuplicate, badgeSuccess, badgeInfo
+  - Date range: today, thisWeek, thisMonth, allTime, selectRange
+  - Footer stats: totalTickets, usedTickets, totalUsers, scansChart (reused)
+  - Welcome messages: welcomeCaisse, welcomeBack (with {name} param interpolation)
+  - Caisse section: vendreTicket, ventesRecentes, lastSalesToday, sold
+  - Other: failedLoad, retry, viewAllActivity, topEvents, topEventsDesc, latestScansActivity, comptableRevenueDesc
+- Updated dashboard.tsx:
+  - Added `import { useTranslation } from '@/lib/i18n'`
+  - Added `const { t } = useTranslation()` at top of Dashboard component
+  - Modified getResultBadge() to accept `t` parameter for translated badge labels
+  - Replaced ALL user-visible hardcoded strings with t() calls (~50 replacements)
+  - Added `key` field to each KPI definition; changed KPI filtering from label-based to key-based
+  - Used t() with param interpolation for welcome messages: t('dashboard.welcomeCaisse', { name: ... })
+  - Chart config objects kept unchanged (per task requirement)
+  - All chart logic, data fetching, formatting, and component structure preserved exactly
+
+Stage Summary:
+- All 60+ hardcoded strings in dashboard.tsx replaced with i18n t() calls
+- 67 new translation keys added across all 4 locales (fr, en, pt, es)
+- ESLint: 0 errors, 0 warnings
+- TypeScript: no new errors (only pre-existing errors in other files)
+- No functionality broken — all chart configs, data logic, and component structure unchanged
+---
+Task ID: 5
+Agent: Main
+Task: Create Panneau Voyageur (Passenger Board) component for SmartTicketQR
+
+Work Log:
+- Read worklog.md, app-store.ts, page.tsx, i18n/translations.ts, api/board/route.ts, prisma/schema.prisma
+- Understood existing architecture: PublicDisplay (dark, kiosk), TransportLine + LineSchedule DB models
+- Added 34 i18n translations under 'board.*' namespace for all 4 locales (fr, en, pt, es)
+  - board.title, board.departures, board.arrivals, board.searchRoute, board.noData
+  - board.onTime, board.delayed, board.boarding, board.departed, board.cancelled
+  - board.seats, board.available, board.full, board.nextDeparture
+  - board.departure, board.arrival, board.company, board.live, board.lastUpdate
+  - board.in, board.now, board.estimated, board.delayOf, board.boardingIn
+  - board.route, board.allStatuses, board.filterStatus, board.showingResults
+  - board.schedule, board.vehicleType, board.noDepartures, board.noArrivals, board.departuresAndArrivals
+- Enhanced /api/board/route.ts:
+  - Added `org` as alias for `orgSlug` query param
+  - Added `type` query param to filter departures/arrivals server-side
+  - Added `limit` query param with max 100 cap
+  - Added mock seat data generator (deterministic hash from schedule ID: 40-69 total seats)
+  - Added `availableSeats`, `totalSeats`, `company`, `transportType` fields to BoardEntry response
+  - Added `updatedAt` ISO timestamp to response
+- Created /src/components/smart-ticket/passenger-board.tsx (~620 lines):
+  - 'use client' directive, uses useTranslation() from @/lib/i18n
+  - Props: orgSlug?: string (falls back to user.organizationId)
+  - Live clock with date display (updates every second)
+  - Auto-refresh every 30 seconds
+  - Stats cards: active departures, arrivals, delayed count, total available seats
+  - Next departure highlight card with border-left color accent
+  - Tabs for departures/arrivals with count badges
+  - Search input (filters by origin, destination, line name, company)
+  - Status filter dropdown (all, on_time, boarding, delayed, departed, cancelled)
+  - Desktop: full table with route, time+status, company, seats, countdown columns
+  - Mobile: simplified card list layout
+  - Color-coded status badges: green (on_time), blue pulsing (boarding), amber (delayed), gray (departed), red (cancelled)
+  - Seat indicator: green (available), amber (low), red (full/0)
+  - Countdown timers for upcoming departures
+  - Loading skeletons, error state with retry, empty state with branding
+  - Uses shadcn/ui: Card, Badge, Input, Tabs, Table, Select, Skeleton
+  - Uses Lucide icons: Bus, Ship, TrainFront, Plane, Clock, ArrowRight, ArrowLeft, etc.
+- Registered 'passenger-board' in app-store.ts PageName type union
+- Imported PassengerBoard and added to pageComponents in page.tsx
+- ESLint: 0 errors, 0 warnings
+- Dev server compiles successfully (GET / 200)
+
+Stage Summary:
+- Passenger board component created at /src/components/smart-ticket/passenger-board.tsx
+- API route enhanced with org/type/limit params and seat/company mock data
+- 34 i18n keys added for 4 locales (FR, EN, PT, ES)
+- Registered as 'passenger-board' page in admin routing
+- Light theme for admin, responsive (mobile cards + desktop table)
+- Auto-refresh every 30s, live clock, search/filter, status color coding

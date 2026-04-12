@@ -43,9 +43,30 @@ interface BoardEntry {
   status: string;
   delayMinutes: number;
   note: string | null;
+  // Enhanced fields for passenger board
+  availableSeats: number;
+  totalSeats: number;
+  company: string;
+  transportType: string;
 }
 
-// ─── GET /api/board?orgSlug=xxx ───────────────────────────────────────────
+// ─── Mock seat data generator (deterministic from schedule id) ────────────
+// Produces consistent seat counts per schedule for demo purposes.
+// Real integration would query Event.soldTickets vs Event.totalTickets.
+
+function generateMockSeats(scheduleId: string): { available: number; total: number } {
+  let hash = 0;
+  for (let i = 0; i < scheduleId.length; i++) {
+    const char = scheduleId.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
+  }
+  const total = 40 + (Math.abs(hash) % 30); // 40-69 seats
+  const sold = Math.abs(hash >> 4) % (total + 1);
+  return { available: total - sold, total };
+}
+
+// ─── GET /api/board?orgSlug=xxx&org=xxx&type=departure&limit=20 ──────────
 // Tableau d'affichage public des départs et arrivées.
 // AUCUNE authentification requise — accès public en lecture seule.
 // Rate limité à 60 requêtes/minute par IP.
@@ -65,11 +86,14 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const orgSlug = searchParams.get('orgSlug');
+    // Accept both `org` and `orgSlug` params
+    const orgSlug = searchParams.get('org') || searchParams.get('orgSlug');
+    const type = searchParams.get('type'); // 'departure' | 'arrival' | undefined (both)
+    const limit = searchParams.get('limit');
 
     if (!orgSlug) {
       return corsResponse(
-        { error: 'Le paramètre orgSlug est requis' },
+        { error: 'Le paramètre org ou orgSlug est requis' },
         400
       );
     }
@@ -92,6 +116,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Build schedule type filter
+    const scheduleFilter: Record<string, unknown> = {};
+    if (type === 'departure' || type === 'arrival') {
+      scheduleFilter.type = type;
+    }
+
     // Récupérer toutes les lignes actives avec leurs horaires
     const lines = await db.transportLine.findMany({
       where: {
@@ -100,6 +130,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         schedules: {
+          where: scheduleFilter,
           orderBy: { time: 'asc' },
         },
       },
@@ -112,6 +143,7 @@ export async function GET(request: NextRequest) {
 
     for (const line of lines) {
       for (const schedule of line.schedules) {
+        const seats = generateMockSeats(schedule.id);
         const entry: BoardEntry = {
           id: schedule.id,
           lineName: line.name,
@@ -123,6 +155,10 @@ export async function GET(request: NextRequest) {
           status: schedule.status,
           delayMinutes: schedule.delayMinutes,
           note: schedule.note,
+          availableSeats: seats.available,
+          totalSeats: seats.total,
+          company: organization.name,
+          transportType: line.vehicleType,
         };
 
         if (schedule.type === 'departure') {
@@ -136,6 +172,11 @@ export async function GET(request: NextRequest) {
     // Trier par heure croissante
     departures.sort((a, b) => a.time.localeCompare(b.time));
     arrivals.sort((a, b) => a.time.localeCompare(b.time));
+
+    // Apply limit if provided
+    const parsedLimit = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : null;
+    const finalDepartures = parsedLimit ? departures.slice(0, parsedLimit) : departures;
+    const finalArrivals = parsedLimit ? arrivals.slice(0, parsedLimit) : arrivals;
 
     return corsResponse({
       organization: {
@@ -152,8 +193,9 @@ export async function GET(request: NextRequest) {
         color: line.color,
         scheduleCount: line.schedules.length,
       })),
-      departures,
-      arrivals,
+      departures: finalDepartures,
+      arrivals: finalArrivals,
+      updatedAt: new Date().toISOString(),
     });
   });
 }

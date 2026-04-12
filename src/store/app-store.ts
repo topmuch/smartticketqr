@@ -24,7 +24,8 @@ export type PageName =
   | 'affiliates'
   | 'fraud-alerts'
   | 'display'
-  | 'ticketing-config';
+  | 'ticketing-config'
+  | 'passenger-board';
 
 interface AppState {
   currentPage: PageName;

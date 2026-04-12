@@ -81,6 +81,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/lib/i18n';
 
 // ── Types ────────────────────────────────────────────────────────────
 interface AnalyticsData {
@@ -205,19 +206,19 @@ function getEventTypeIcon(type: string) {
   }
 }
 
-function getResultBadge(result: string) {
+function getResultBadge(result: string, t: (key: string) => string) {
   const lower = result.toLowerCase();
   if (lower === 'valid' || lower === 'success' || lower === 'active') {
-    return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">Valid</Badge>;
+    return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">{t('dashboard.badgeValid')}</Badge>;
   }
   if (lower === 'invalid' || lower === 'failed' || lower === 'cancelled') {
-    return <Badge variant="destructive">Invalid</Badge>;
+    return <Badge variant="destructive">{t('dashboard.badgeInvalid')}</Badge>;
   }
   if (lower === 'expired') {
-    return <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">Expired</Badge>;
+    return <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">{t('dashboard.badgeExpired')}</Badge>;
   }
   if (lower === 'duplicate') {
-    return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">Duplicate</Badge>;
+    return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">{t('dashboard.badgeDuplicate')}</Badge>;
   }
   return <Badge variant="outline">{result}</Badge>;
 }
@@ -290,6 +291,7 @@ interface StatsData {
 
 // ── Main Dashboard ───────────────────────────────────────────────────
 export default function Dashboard() {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const setCurrentPage = useAppStore((s) => s.setCurrentPage);
   const [dateRange, setDateRange] = useState<DateRange>('all');
@@ -349,14 +351,14 @@ export default function Dashboard() {
               <ScanLine className="size-8 text-sky-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Accès réservé au scanner</h2>
+              <h2 className="text-xl font-bold">{t('dashboard.scannerOnly')}</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 {roleInfo.description}
               </p>
             </div>
             <Button onClick={() => setCurrentPage('scanner')} className="w-full">
               <ScanLine className="mr-2 size-4" />
-              Aller au Scanner
+              {t('dashboard.goToScanner')}
             </Button>
           </CardContent>
         </Card>
@@ -412,44 +414,49 @@ export default function Dashboard() {
   // KPI definitions
   const kpis = [
     {
-      label: 'Total Tickets Sold',
+      key: 'ticketsSold',
+      label: t('dashboard.ticketsSold'),
       value: data ? formatNumber(data.soldTickets) : '—',
       icon: <Ticket className="size-5 text-emerald-600" />,
       iconBg: 'bg-emerald-100 dark:bg-emerald-950',
       trend: data ? 12.5 : 0,
-      trendLabel: 'vs last period',
+      trendLabel: t('dashboard.trendVsLastPeriod'),
     },
     {
-      label: 'Total Revenue',
+      key: 'totalRevenue',
+      label: t('dashboard.totalRevenue'),
       value: data ? formatCurrency(data.totalRevenue) : '—',
       icon: <DollarSign className="size-5 text-emerald-600" />,
       iconBg: 'bg-emerald-100 dark:bg-emerald-950',
       trend: data ? 8.2 : 0,
-      trendLabel: 'vs last period',
+      trendLabel: t('dashboard.trendVsLastPeriod'),
     },
     {
-      label: 'Active Events',
+      key: 'activeEvents',
+      label: t('dashboard.activeEvents'),
       value: data ? formatNumber(data.activeEvents) : '—',
       icon: <CalendarCheck className="size-5 text-teal-600" />,
       iconBg: 'bg-teal-100 dark:bg-teal-950',
       trend: data ? 0 : 0,
-      trendLabel: 'currently running',
+      trendLabel: t('dashboard.currentlyRunning'),
     },
     {
-      label: 'Scans Today',
+      key: 'scansToday',
+      label: t('dashboard.scansToday'),
       value: statsData ? formatNumber(statsData.kpis.totalScansToday) : data ? formatNumber(data.scansToday) : '—',
       icon: <ScanLine className="size-5 text-green-600" />,
       iconBg: 'bg-green-100 dark:bg-green-950',
       trend: statsData && statsData.kpis.totalScansToday > 15 ? 24.1 : -3.2,
-      trendLabel: 'vs yesterday',
+      trendLabel: t('dashboard.vsYesterday'),
     },
     {
-      label: 'Validation Rate',
+      key: 'validationRate',
+      label: t('dashboard.validationRate'),
       value: statsData ? `${(statsData.kpis.validationRate * 100).toFixed(1)}%` : '—',
       icon: <Zap className="size-5 text-amber-600" />,
       iconBg: 'bg-amber-100 dark:bg-amber-950',
       trend: 0,
-      trendLabel: statsData ? 'used / (active + used)' : '',
+      trendLabel: statsData ? t('dashboard.usedOverActive') : '',
       isProgress: true,
       progressValue: statsData ? statsData.kpis.validationRate * 100 : 0,
     },
@@ -465,23 +472,23 @@ export default function Dashboard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            {isCaisse ? 'Ventes du Jour' : isComptable ? 'Tableau de Bord Financier' : 'Dashboard'}
+            {isCaisse ? t('dashboard.caisseTitle') : isComptable ? t('dashboard.comptableTitle') : t('dashboard.title')}
           </h1>
           <p className="mt-1 text-muted-foreground text-sm">
-            {isCaisse ? `Bienvenue, ${user?.name || 'User'}` : `Welcome back, ${user?.name || 'User'}`}
+            {isCaisse ? t('dashboard.welcomeCaisse', { name: user?.name || t('dashboard.user') }) : t('dashboard.welcomeBack', { name: user?.name || t('dashboard.user') })}
           </p>
         </div>
         {!isCaisse && (
         <div className="flex items-center gap-3">
           <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
             <SelectTrigger size="sm" className="w-[150px]">
-              <SelectValue placeholder="Select range" />
+              <SelectValue placeholder={t('dashboard.selectRange')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="all">All Time</SelectItem>
+              <SelectItem value="today">{t('dashboard.today')}</SelectItem>
+              <SelectItem value="week">{t('dashboard.thisWeek')}</SelectItem>
+              <SelectItem value="month">{t('dashboard.thisMonth')}</SelectItem>
+              <SelectItem value="all">{t('dashboard.allTime')}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -491,7 +498,7 @@ export default function Dashboard() {
             disabled={isFetching}
           >
             <RefreshCw className={`size-4 ${isFetching ? 'animate-spin' : ''}`} />
-            Refresh
+            {t('common.refresh')}
           </Button>
         </div>
         )}
@@ -503,10 +510,10 @@ export default function Dashboard() {
           <CardContent className="flex items-center gap-3 p-4">
             <AlertCircle className="size-5 text-destructive" />
             <p className="text-sm text-destructive">
-              Failed to load dashboard data. Please check your connection and try again.
+              {t('dashboard.failedLoad')}
             </p>
             <Button variant="outline" size="sm" onClick={handleRefresh} className="ml-auto">
-              Retry
+              {t('dashboard.retry')}
             </Button>
           </CardContent>
         </Card>
@@ -520,9 +527,9 @@ export default function Dashboard() {
         {isLoading
           ? Array.from({ length: isCaisse || isComptable ? 3 : 5 }).map((_, i) => <KpiCardSkeleton key={i} />)
           : (isCaisse
-              ? kpis.filter(k => ['Total Tickets Sold', 'Total Revenue', 'Active Events'].includes(k.label))
+              ? kpis.filter(k => ['ticketsSold', 'totalRevenue', 'activeEvents'].includes(k.key))
               : isComptable
-                ? kpis.filter(k => ['Total Revenue', 'Total Tickets Sold', 'Validation Rate'].includes(k.label))
+                ? kpis.filter(k => ['totalRevenue', 'ticketsSold', 'validationRate'].includes(k.key))
                 : kpis
             ).map((kpi, i) => (
               <Card key={i} className="relative overflow-hidden">
@@ -566,29 +573,29 @@ export default function Dashboard() {
         <div className="space-y-4">
           <Button onClick={() => setCurrentPage('tickets')} size="lg" className="w-full sm:w-auto">
             <Ticket className="mr-2 size-4" />
-            Vendre un Ticket
+            {t('dashboard.vendreTicket')}
           </Button>
           {isLoading ? (
             <TableSkeleton />
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Ventes Récentes</CardTitle>
-                <CardDescription>Derniers tickets vendus aujourd&apos;hui</CardDescription>
+                <CardTitle className="text-base">{t('dashboard.ventesRecentes')}</CardTitle>
+                <CardDescription>{t('dashboard.lastSalesToday')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {data && data.recentActivity.filter(a => a.action === 'ticket_created').length === 0 ? (
                   <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
-                    Aucune vente aujourd&apos;hui
+                    {t('dashboard.noSalesToday')}
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[180px]">Heure</TableHead>
-                        <TableHead>Vendeur</TableHead>
-                        <TableHead>Détails</TableHead>
-                        <TableHead className="text-right">Statut</TableHead>
+                        <TableHead className="w-[180px]">{t('dashboard.time')}</TableHead>
+                        <TableHead>{t('dashboard.seller')}</TableHead>
+                        <TableHead>{t('common.details')}</TableHead>
+                        <TableHead className="text-right">{t('dashboard.status')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -604,7 +611,7 @@ export default function Dashboard() {
                               </div>
                             </TableCell>
                             <TableCell className="text-sm font-medium">
-                              {activity.user?.name || 'System'}
+                              {activity.user?.name || t('dashboard.system')}
                             </TableCell>
                             <TableCell className="max-w-[250px] truncate text-muted-foreground text-xs">
                               {activity.details || '—'}
@@ -612,7 +619,7 @@ export default function Dashboard() {
                             <TableCell className="text-right">
                               <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
                                 <CheckCircle2 className="mr-1 size-3" />
-                                Vendu
+                                {t('dashboard.sold')}
                               </Badge>
                             </TableCell>
                           </TableRow>
@@ -636,13 +643,13 @@ export default function Dashboard() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Ticket Sales Trend</CardTitle>
-              <CardDescription>Daily scan activity over the past 7 days</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.ticketSalesTrend')}</CardTitle>
+              <CardDescription>{t('dashboard.scanActivity')}</CardDescription>
             </CardHeader>
             <CardContent>
               {dailyScansChartData.length === 0 ? (
                 <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
-                  No scan data available for this period
+                  {t('dashboard.noScanData')}
                 </div>
               ) : (
                 <ChartContainer config={salesChartConfig} className="h-[280px] w-full">
@@ -682,13 +689,13 @@ export default function Dashboard() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Revenue by Event</CardTitle>
-              <CardDescription>Top events by total revenue generated</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.revenueByEvent')}</CardTitle>
+              <CardDescription>{t('dashboard.topEventsRevenue')}</CardDescription>
             </CardHeader>
             <CardContent>
               {revenueChartData.length === 0 ? (
                 <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
-                  No revenue data available yet
+                  {t('dashboard.noRevenueData')}
                 </div>
               ) : (
                 <ChartContainer config={revenueChartConfig} className="h-[280px] w-full">
@@ -722,13 +729,13 @@ export default function Dashboard() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Daily Revenue</CardTitle>
-              <CardDescription>Revenue trend over the past 7 days</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.dailyRevenue')}</CardTitle>
+              <CardDescription>{t('dashboard.revenueTrend')}</CardDescription>
             </CardHeader>
             <CardContent>
               {dailyRevenueChartData.length === 0 || dailyRevenueChartData.every(d => d.revenue === 0) ? (
                 <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
-                  No revenue data available yet
+                  {t('dashboard.noRevenueData')}
                 </div>
               ) : (
                 <ChartContainer config={revenueChartConfig} className="h-[280px] w-full">
@@ -763,13 +770,13 @@ export default function Dashboard() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Ticket Status Distribution</CardTitle>
-              <CardDescription>Current breakdown of ticket statuses</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.ticketStatus')}</CardTitle>
+              <CardDescription>{t('dashboard.statusBreakdown')}</CardDescription>
             </CardHeader>
             <CardContent>
               {ticketsByStatusData.length === 0 ? (
                 <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
-                  No ticket status data available
+                  {t('dashboard.noStatusData')}
                 </div>
               ) : (
                 <ChartContainer config={statusChartConfig} className="h-[280px] w-full">
@@ -807,13 +814,13 @@ export default function Dashboard() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Hourly Traffic</CardTitle>
-              <CardDescription>Scan volume by hour of day</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.hourlyTraffic')}</CardTitle>
+              <CardDescription>{t('dashboard.scanVolume')}</CardDescription>
             </CardHeader>
             <CardContent>
               {hourlyTrafficChartData.length === 0 ? (
                 <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
-                  No traffic data available
+                  {t('dashboard.noTrafficData')}
                 </div>
               ) : (
                 <ChartContainer config={hourlyChartConfig} className="h-[280px] w-full">
@@ -842,13 +849,13 @@ export default function Dashboard() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Ticket Types</CardTitle>
-              <CardDescription>Distribution of ticket types sold</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.ticketTypes')}</CardTitle>
+              <CardDescription>{t('dashboard.typeDistribution')}</CardDescription>
             </CardHeader>
             <CardContent>
               {ticketTypeChartData.length === 0 ? (
                 <div className="flex h-[280px] items-center justify-center text-muted-foreground text-sm">
-                  No ticket type data available
+                  {t('dashboard.noTypeData')}
                 </div>
               ) : (
                 <ChartContainer config={ticketTypeChartConfig} className="h-[280px] w-full">
@@ -884,8 +891,8 @@ export default function Dashboard() {
       {!isComptable && (
       <Tabs defaultValue="recent-activity" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="recent-activity">Recent Activity</TabsTrigger>
-          <TabsTrigger value="top-events">Top Events</TabsTrigger>
+          <TabsTrigger value="recent-activity">{t('dashboard.recentActivity')}</TabsTrigger>
+          <TabsTrigger value="top-events">{t('dashboard.topEvents')}</TabsTrigger>
         </TabsList>
 
         {/* Recent Activity Table */}
@@ -895,23 +902,23 @@ export default function Dashboard() {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Recent Activity</CardTitle>
-                <CardDescription>Latest scans and system activity</CardDescription>
+                <CardTitle className="text-base">{t('dashboard.recentActivity')}</CardTitle>
+                <CardDescription>{t('dashboard.latestScansActivity')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {data && data.recentActivity.length === 0 ? (
                   <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
-                    No recent activity to display
+                    {t('dashboard.noRecentActivity')}
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[180px]">Time</TableHead>
-                        <TableHead>User</TableHead>
-                        <TableHead>Action</TableHead>
-                        <TableHead>Details</TableHead>
-                        <TableHead className="text-right">Result</TableHead>
+                        <TableHead className="w-[180px]">{t('dashboard.time')}</TableHead>
+                        <TableHead>{t('dashboard.user')}</TableHead>
+                        <TableHead>{t('dashboard.action')}</TableHead>
+                        <TableHead>{t('common.details')}</TableHead>
+                        <TableHead className="text-right">{t('dashboard.result')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -924,7 +931,7 @@ export default function Dashboard() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm font-medium">
-                            {activity.user?.name || 'System'}
+                            {activity.user?.name || t('dashboard.system')}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1.5 text-sm">
@@ -950,13 +957,13 @@ export default function Dashboard() {
                           </TableCell>
                           <TableCell className="text-right">
                             {activity.action === 'scan'
-                              ? getResultBadge(activity.details?.includes('valid') ? 'valid' : 'invalid')
+                              ? getResultBadge(activity.details?.includes('valid') ? 'valid' : 'invalid', t)
                               : activity.action === 'login'
                                 ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
                                     <CheckCircle2 className="mr-1 size-3" />
-                                    Success
+                                    {t('common.success')}
                                   </Badge>
-                                : <Badge variant="outline">Info</Badge>
+                                : <Badge variant="outline">{t('dashboard.badgeInfo')}</Badge>
                             }
                           </TableCell>
                         </TableRow>
@@ -967,7 +974,7 @@ export default function Dashboard() {
                 {data && data.recentActivity.length > 10 && (
                   <div className="mt-4 flex justify-center">
                     <Button variant="ghost" size="sm" className="text-muted-foreground text-xs">
-                      View All Activity
+                      {t('dashboard.viewAllActivity')}
                       <ArrowUpRight className="ml-1 size-3" />
                     </Button>
                   </div>
@@ -984,23 +991,23 @@ export default function Dashboard() {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Top Events</CardTitle>
-                <CardDescription>Events ranked by total revenue generated</CardDescription>
+                <CardTitle className="text-base">{t('dashboard.topEvents')}</CardTitle>
+                <CardDescription>{t('dashboard.topEventsDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {data && data.revenueByEvent.length === 0 ? (
                   <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
-                    No events with revenue data yet
+                    {t('dashboard.noEventsRevenue')}
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[40px]">#</TableHead>
-                        <TableHead>Event Name</TableHead>
-                        <TableHead className="hidden sm:table-cell">Type</TableHead>
-                        <TableHead className="text-right">Revenue</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
+                        <TableHead>{t('dashboard.eventName')}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t('dashboard.type')}</TableHead>
+                        <TableHead className="text-right">{t('dashboard.revenue')}</TableHead>
+                        <TableHead className="text-right">{t('dashboard.status')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1020,7 +1027,7 @@ export default function Dashboard() {
                           <TableCell className="hidden sm:table-cell">
                             <Badge variant="outline" className="gap-1">
                               {getEventTypeIcon(event.eventName)}
-                              Event
+                              {t('dashboard.event')}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right font-medium tabular-nums">
@@ -1028,7 +1035,7 @@ export default function Dashboard() {
                           </TableCell>
                           <TableCell className="text-right">
                             <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-                              Active
+                              {t('common.active')}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -1047,22 +1054,22 @@ export default function Dashboard() {
       {isComptable && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Revenus par Événement</CardTitle>
-            <CardDescription>Événements classés par revenus totaux générés</CardDescription>
+            <CardTitle className="text-base">{t('dashboard.revenueByEvent')}</CardTitle>
+            <CardDescription>{t('dashboard.comptableRevenueDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             {data && data.revenueByEvent.length === 0 ? (
               <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
-                Aucun événement avec des revenus
+                {t('dashboard.comptableNoEvents')}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[40px]">#</TableHead>
-                    <TableHead>Nom de l&apos;événement</TableHead>
-                    <TableHead className="text-right">Revenus</TableHead>
-                    <TableHead className="text-right">Statut</TableHead>
+                    <TableHead>{t('dashboard.eventName')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.revenue')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.status')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1084,7 +1091,7 @@ export default function Dashboard() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-                          Actif
+                          {t('common.active')}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -1105,7 +1112,7 @@ export default function Dashboard() {
                 <Ticket className="size-4 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Tickets</p>
+                <p className="text-xs text-muted-foreground">{t('dashboard.totalTickets')}</p>
                 <p className="text-sm font-semibold">{formatNumber(data.totalTickets)}</p>
               </div>
             </div>
@@ -1116,7 +1123,7 @@ export default function Dashboard() {
                 <CheckCircle2 className="size-4 text-blue-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Used Tickets</p>
+                <p className="text-xs text-muted-foreground">{t('dashboard.usedTickets')}</p>
                 <p className="text-sm font-semibold">{formatNumber(data.usedTickets)}</p>
               </div>
             </div>
@@ -1127,7 +1134,7 @@ export default function Dashboard() {
                 <Users className="size-4 text-teal-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Users</p>
+                <p className="text-xs text-muted-foreground">{t('dashboard.totalUsers')}</p>
                 <p className="text-sm font-semibold">{formatNumber(data.totalUsers)}</p>
               </div>
             </div>
@@ -1138,7 +1145,7 @@ export default function Dashboard() {
                 <ScanLine className="size-4 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Scans This Week</p>
+                <p className="text-xs text-muted-foreground">{t('dashboard.scansChart')}</p>
                 <p className="text-sm font-semibold">{formatNumber(data.scansThisWeek)}</p>
               </div>
             </div>

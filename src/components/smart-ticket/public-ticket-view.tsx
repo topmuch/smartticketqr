@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
+import jsPDF from 'jspdf';
 import {
   QrCode,
   Ticket,
@@ -222,83 +223,181 @@ export default function PublicTicketView({ ticketCode, orgSlug }: PublicTicketVi
     window.open(`https://wa.me/?text=${encoded}`, '_blank');
   };
 
-  // PDF download handler (simple text-based PDF using print)
+  // PDF download handler using jsPDF
   const handleDownloadPDF = () => {
     if (!data) return;
-    // Create a printable ticket layout
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      // Fallback: use browser print
-      window.print();
-      return;
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth(); // 210mm
+    const ticketLeft = 20;
+    const ticketRight = pageWidth - 20;
+    const ticketWidth = ticketRight - ticketLeft;
+    const centerX = pageWidth / 2;
+    const ticketTop = 20;
+
+    // Convert org hex color to RGB
+    const hex = data.organization.color || '#059669';
+    const cr = parseInt(hex.slice(1, 3), 16);
+    const cg = parseInt(hex.slice(3, 5), 16);
+    const cb = parseInt(hex.slice(5, 7), 16);
+
+    // ---- Helpers ----
+    const dashedLine = (ly: number) => {
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineDashPattern([3, 3], 0);
+      doc.setLineWidth(0.3);
+      doc.line(ticketLeft + 5, ly, ticketRight - 5, ly);
+    };
+
+    let y = ticketTop;
+
+    // ---- ORG HEADER BAR ----
+    doc.setDrawColor(cr, cg, cb);
+    doc.setLineDashPattern([], 0);
+    doc.setLineWidth(0.8);
+    doc.setFillColor(cr, cg, cb);
+    doc.roundedRect(ticketLeft, y, ticketWidth, 24, 4, 4, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text(data.organization.name, centerX, y + 11, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('SmartTicketQR', centerX, y + 18, { align: 'center' });
+
+    y += 32;
+    dashedLine(y);
+
+    // ---- EVENT NAME ----
+    y += 8;
+    doc.setTextColor(40, 40, 40);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(17);
+    doc.text(data.event.name, centerX, y, { align: 'center', maxWidth: ticketWidth - 20 });
+
+    // ---- DATE / TIME / LOCATION ----
+    y += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(100, 100, 100);
+    const dateStr = `${format(new Date(data.event.startDate), 'dd MMM yyyy')}  -  ${format(new Date(data.event.startDate), 'HH:mm')}`;
+    doc.text(dateStr, centerX, y, { align: 'center' });
+
+    if (data.event.location) {
+      y += 6;
+      doc.text(data.event.location, centerX, y, { align: 'center' });
     }
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Ticket - ${data.ticket.code}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; }
-          .ticket { max-width: 400px; margin: 0 auto; border: 2px solid ${data.organization.color || '#059669'}; border-radius: 12px; overflow: hidden; }
-          .header { background: ${data.organization.color || '#059669'}; color: white; padding: 16px; text-align: center; }
-          .header h1 { font-size: 18px; margin-bottom: 4px; }
-          .header p { font-size: 12px; opacity: 0.9; }
-          .body { padding: 20px; }
-          .event { margin-bottom: 16px; }
-          .event h2 { font-size: 16px; margin-bottom: 4px; }
-          .event .date { color: #666; font-size: 13px; }
-          .event .location { color: #666; font-size: 13px; margin-top: 2px; }
-          .divider { border-top: 1px dashed #ddd; margin: 16px 0; }
-          .holder { margin-bottom: 12px; }
-          .holder .label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
-          .holder .name { font-size: 15px; font-weight: 600; }
-          .code-section { text-align: center; padding: 12px; background: #f8f8f8; border-radius: 8px; margin-bottom: 12px; }
-          .code-section .label { font-size: 11px; color: #999; }
-          .code-section .code { font-size: 20px; font-weight: 700; letter-spacing: 2px; font-family: monospace; color: ${data.organization.color || '#059669'}; }
-          .price { text-align: center; font-size: 24px; font-weight: 700; margin-top: 12px; }
-          .footer { text-align: center; font-size: 10px; color: #aaa; padding: 12px 20px; border-top: 1px solid #eee; }
-          @media print { body { padding: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="ticket">
-          <div class="header">
-            <h1>${data.organization.name}</h1>
-            <p>SmartTicketQR</p>
-          </div>
-          <div class="body">
-            <div class="event">
-              <h2>${data.event.name}</h2>
-              <div class="date">${format(new Date(data.event.startDate), 'dd MMM yyyy')} - ${format(new Date(data.event.startDate), 'HH:mm')}</div>
-              ${data.event.location ? `<div class="location">${data.event.location}</div>` : ''}
-            </div>
-            <div class="divider"></div>
-            <div class="holder">
-              <div class="label">Passager</div>
-              <div class="name">${data.ticket.holderName}</div>
-              ${data.ticket.seatNumber ? `<div style="font-size:13px;color:#666;margin-top:2px">Si\u00e8ge: ${data.ticket.seatNumber}</div>` : ''}
-            </div>
-            <div class="code-section">
-              <div class="label">Code Billet</div>
-              <div class="code">${data.ticket.code}</div>
-            </div>
-            <div class="price">${data.ticket.currency} ${data.ticket.price.toFixed(2)}</div>
-          </div>
-          <div class="footer">
-            Ce billet est personnel et non transf\u00e9rable. Pr\u00e9sentez-le \u00e0 l'entr\u00e9e.
-          </div>
-        </div>
-        <script>
-          window.onload = function() {
-            window.print();
-            window.onafterprint = function() { window.close(); };
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
+
+    y += 8;
+    dashedLine(y);
+
+    // ---- HOLDER INFO ----
+    y += 8;
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont('helvetica', 'normal');
+    doc.text('PASSAGER', ticketLeft + 8, y);
+
+    y += 7;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    doc.text(data.ticket.holderName, ticketLeft + 8, y);
+
+    if (data.ticket.seatNumber) {
+      y += 7;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('Siege : ' + data.ticket.seatNumber, ticketLeft + 8, y);
+    }
+
+    y += 10;
+    dashedLine(y);
+
+    // ---- STATUS BADGE ----
+    y += 8;
+    const statusCfg = getStatusConfig(data.ticket.status);
+    const statusLabel = statusCfg.label.toUpperCase();
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    const badgeW = doc.getTextWidth(statusLabel) + 14;
+    const badgeX = centerX - badgeW / 2;
+
+    doc.setFillColor(cr, cg, cb);
+    doc.roundedRect(badgeX, y - 4, badgeW, 8, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text(statusLabel, centerX, y + 0.5, { align: 'center' });
+
+    y += 10;
+    dashedLine(y);
+
+    // ---- TICKET CODE ----
+    y += 8;
+    doc.setTextColor(cr, cg, cb);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('CODE BILLET', centerX, y, { align: 'center' });
+
+    y += 9;
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(cr, cg, cb);
+    doc.text(data.ticket.code, centerX, y, { align: 'center' });
+
+    // ---- PRICE ----
+    y += 12;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(24);
+    doc.setTextColor(40, 40, 40);
+    doc.text(`${data.ticket.currency} ${data.ticket.price.toFixed(2)}`, centerX, y, { align: 'center' });
+
+    y += 10;
+    dashedLine(y);
+
+    // ---- QR CODE ----
+    y += 5;
+    const qrSize = 38;
+    const qrX = centerX - qrSize / 2;
+    if (data.qrImage) {
+      try {
+        doc.addImage(data.qrImage, 'PNG', qrX, y, qrSize, qrSize);
+      } catch {
+        // QR image add failed, skip it
+      }
+    }
+
+    y += qrSize + 8;
+    dashedLine(y);
+
+    // ---- FOOTER ----
+    y += 8;
+    doc.setTextColor(160, 160, 160);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.text('Ce billet est personnel et non transferable.', centerX, y, { align: 'center' });
+    y += 5;
+    doc.text("Presentez-le a l'entree.", centerX, y, { align: 'center' });
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Genere par SmartTicketQR - ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, centerX, y, { align: 'center' });
+
+    // ---- DRAW TICKET OUTER BORDER ----
+    const ticketBottom = y + 5;
+    doc.setDrawColor(cr, cg, cb);
+    doc.setLineDashPattern([], 0);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(ticketLeft, ticketTop, ticketWidth, ticketBottom - ticketTop, 4, 4, 'S');
+
+    // ---- SAVE ----
+    doc.save(`ticket-${data.ticket.code}.pdf`);
   };
 
   // Loading state

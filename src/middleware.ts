@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // ---------------------------------------------------------------------------
+// Supported locales for i18n
+// ---------------------------------------------------------------------------
+const SUPPORTED_LOCALES = ['fr', 'en', 'pt', 'es'] as const;
+const DEFAULT_LOCALE = 'fr';
+
+// ---------------------------------------------------------------------------
 // Paths that should bypass the middleware entirely (internal Next.js routes)
 // ---------------------------------------------------------------------------
 const SKIP_PATHS = [
@@ -9,6 +15,19 @@ const SKIP_PATHS = [
   /^\/api\//,         // API routes (handle their own headers)
   /^\/__nextjs/,      // Next.js development helpers
 ];
+
+// ---------------------------------------------------------------------------
+// Detect locale from Accept-Language header
+// ---------------------------------------------------------------------------
+function detectLocaleFromHeader(acceptLanguage: string | null): string {
+  if (!acceptLanguage) return DEFAULT_LOCALE;
+  const lang = acceptLanguage.toLowerCase().split(',')[0]?.trim() || '';
+  if (lang.startsWith('fr')) return 'fr';
+  if (lang.startsWith('pt')) return 'pt';
+  if (lang.startsWith('es')) return 'es';
+  if (lang.startsWith('en')) return 'en';
+  return DEFAULT_LOCALE;
+}
 
 // ---------------------------------------------------------------------------
 // Common bot / attack paths that should be blocked outright
@@ -127,6 +146,29 @@ export function middleware(request: NextRequest) {
   if (!isProduction) {
     response.headers.set('X-Powered-By', 'SmartTicketQR');
   }
+
+  // -----------------------------------------------------------------------
+  // 4. i18n locale detection (cookie → Accept-Language → default)
+  // -----------------------------------------------------------------------
+  const localeCookie = request.cookies.get('smartticket-lang')?.value;
+  let detectedLocale: string;
+
+  if (localeCookie && SUPPORTED_LOCALES.includes(localeCookie as typeof SUPPORTED_LOCALES[number])) {
+    // User already has a locale preference cookie
+    detectedLocale = localeCookie;
+  } else {
+    // First visit: detect from browser Accept-Language header
+    detectedLocale = detectLocaleFromHeader(request.headers.get('Accept-Language'));
+    // Set the cookie for future requests (1 year, SameSite=Lax)
+    response.cookies.set('smartticket-lang', detectedLocale, {
+      path: '/',
+      maxAge: 31536000,
+      sameSite: 'lax',
+    });
+  }
+
+  // Expose detected locale via response header (client-side I18nProvider can read this)
+  response.headers.set('X-Detected-Locale', detectedLocale);
 
   return response;
 }
