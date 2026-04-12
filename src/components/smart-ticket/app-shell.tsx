@@ -32,6 +32,7 @@ import {
   Headphones,
   Handshake,
   Monitor,
+  MessageSquare,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -60,37 +61,123 @@ import SubscriptionBanner from '@/components/smart-ticket/subscription-banner';
 import { LanguageSwitcher } from '@/components/smart-ticket/language-switcher';
 import { cn } from '@/lib/utils';
 
+// ── Types ───────────────────────────────────────────────────────────────────
+
+type RoleScope = 'super_admin' | 'client';
+
 interface NavItem {
   id: PageName;
   label: string;
   icon: React.ElementType;
   badge?: string;
-  roles?: string[];
+  scope: RoleScope; // 'super_admin' = Super Admin only, 'client' = both or Admin Client focused
 }
 
-const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'events', label: 'Events & Transport', icon: Calendar },
-  { id: 'tickets', label: 'Tickets', icon: Ticket, badge: 'QR' },
-  { id: 'scanner', label: 'QR Scanner', icon: ScanLine },
-  { id: 'display', label: 'Dynamic Display', icon: Monitor },
-  { id: 'users', label: 'User Management', icon: Users, roles: ['super_admin', 'admin'] },
-  { id: 'transactions', label: 'Transactions', icon: Receipt, roles: ['super_admin', 'admin'] },
-  { id: 'activity-logs', label: 'Activity Logs', icon: Activity, roles: ['super_admin', 'admin'] },
-  { id: 'organizations', label: 'Organizations', icon: Building2, roles: ['super_admin', 'admin'] },
-  { id: 'billing', label: 'Billing & Plans', icon: CreditCard, roles: ['super_admin', 'admin'] },
-  { id: 'scan-logs', label: 'Scan Logs', icon: ClipboardList, roles: ['super_admin', 'admin'] },
-  { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
-  { id: 'audit-logs', label: 'Audit Logs', icon: ShieldCheck, roles: ['super_admin', 'admin'] },
-  { id: 'api-keys', label: 'API Keys', icon: KeyRound, roles: ['super_admin', 'admin'] },
-  { id: 'webhooks', label: 'Webhooks', icon: Webhook, roles: ['super_admin', 'admin'] },
-  { id: 'fraud-alerts', label: 'Fraud Alerts', icon: ShieldAlert, roles: ['super_admin', 'admin'] },
-  { id: 'custom-domains', label: 'Custom Domains', icon: Globe, roles: ['super_admin', 'admin'] },
-  { id: 'automation', label: 'Automation', icon: Zap, roles: ['super_admin', 'admin'] },
-  { id: 'support', label: 'Support', icon: Headphones },
-  { id: 'affiliates', label: 'Affiliates', icon: Handshake, roles: ['super_admin', 'admin'] },
-  { id: 'settings', label: 'Settings', icon: Settings },
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+// ── Navigation Definition ───────────────────────────────────────────────────
+
+const SUPER_ADMIN_NAV: NavGroup[] = [
+  {
+    title: 'Core Platform',
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, scope: 'super_admin' },
+      { id: 'organizations', label: 'Organizations', icon: Building2, scope: 'super_admin' },
+      { id: 'users', label: 'User Management', icon: Users, scope: 'super_admin' },
+      { id: 'billing', label: 'Billing & Plans', icon: CreditCard, scope: 'super_admin' },
+      { id: 'transactions', label: 'Transactions', icon: Receipt, scope: 'super_admin' },
+    ],
+  },
+  {
+    title: 'Security & System',
+    items: [
+      { id: 'api-keys', label: 'API Keys', icon: KeyRound, scope: 'super_admin' },
+      { id: 'webhooks', label: 'Webhooks', icon: Webhook, scope: 'super_admin' },
+      { id: 'fraud-alerts', label: 'Fraud Alerts', icon: ShieldAlert, scope: 'super_admin' },
+      { id: 'audit-logs', label: 'Audit Logs', icon: ShieldCheck, scope: 'super_admin' },
+      { id: 'activity-logs', label: 'Activity Logs', icon: Activity, scope: 'super_admin' },
+    ],
+  },
+  {
+    title: 'Analytics',
+    items: [
+      { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, scope: 'super_admin' },
+      { id: 'scan-logs', label: 'Scan Logs', icon: ClipboardList, scope: 'super_admin' },
+    ],
+  },
+  {
+    title: 'Infrastructure',
+    items: [
+      { id: 'custom-domains', label: 'Custom Domains', icon: Globe, scope: 'super_admin' },
+      { id: 'automation', label: 'Automation', icon: Zap, scope: 'super_admin' },
+      { id: 'display', label: 'Dynamic Display', icon: Monitor, scope: 'super_admin' },
+    ],
+  },
+  {
+    title: 'Growth',
+    items: [
+      { id: 'affiliates', label: 'Affiliates', icon: Handshake, scope: 'super_admin' },
+      { id: 'support', label: 'Support', icon: Headphones, scope: 'super_admin' },
+    ],
+  },
 ];
+
+const CLIENT_NAV: NavGroup[] = [
+  {
+    title: 'Core Business',
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, scope: 'client' },
+      { id: 'events', label: 'Events & Transport', icon: Calendar, scope: 'client' },
+      { id: 'tickets', label: 'Tickets', icon: Ticket, badge: 'QR', scope: 'client' },
+      { id: 'scanner', label: 'QR Scanner', icon: ScanLine, scope: 'client' },
+      { id: 'display', label: 'Dynamic Display', icon: Monitor, scope: 'client' },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { id: 'users', label: 'User Management', icon: Users, scope: 'client' },
+    ],
+  },
+  {
+    title: 'Tracking',
+    items: [
+      { id: 'transactions', label: 'Transactions', icon: Receipt, scope: 'client' },
+      { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, scope: 'client' },
+      { id: 'scan-logs', label: 'Scan Logs', icon: ClipboardList, scope: 'client' },
+    ],
+  },
+  {
+    title: 'Settings',
+    items: [
+      { id: 'settings', label: 'Settings', icon: Settings, scope: 'client' },
+      { id: 'api-keys', label: 'API Keys', icon: KeyRound, scope: 'client' },
+      { id: 'webhooks', label: 'Webhooks', icon: Webhook, scope: 'client' },
+    ],
+  },
+  {
+    title: 'Logs',
+    items: [
+      { id: 'activity-logs', label: 'Activity Logs', icon: Activity, scope: 'client' },
+    ],
+  },
+];
+
+// ── Flat nav lookup (for header title) ─────────────────────────────────────
+
+const ALL_NAV_ITEMS: NavItem[] = [
+  ...SUPER_ADMIN_NAV.flatMap((g) => g.items),
+  ...CLIENT_NAV.flatMap((g) => g.items),
+];
+
+function getPageLabel(pageId: PageName): string {
+  return ALL_NAV_ITEMS.find((item) => item.id === pageId)?.label || 'Dashboard';
+}
+
+// ── Sidebar Component ──────────────────────────────────────────────────────
 
 function Sidebar() {
   const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen } = useAppStore();
@@ -99,9 +186,16 @@ function Sidebar() {
   const { theme, setTheme } = useTheme();
   const [mounted] = useState(true);
 
-  const filteredNavItems = navItems.filter(
-    (item) => !item.roles || (user?.role && item.roles.includes(user.role))
-  );
+  const isSuperAdmin = user?.role === 'super_admin';
+  const navGroups = isSuperAdmin ? SUPER_ADMIN_NAV : CLIENT_NAV;
+
+  // Safety: if current page isn't accessible, redirect to dashboard
+  const accessiblePages = navGroups.flatMap((g) => g.items.map((i) => i.id));
+  useEffect(() => {
+    if (!accessiblePages.includes(currentPage)) {
+      setCurrentPage('dashboard');
+    }
+  }, [currentPage, accessiblePages, setCurrentPage]);
 
   const handleNavClick = (pageId: PageName) => {
     setCurrentPage(pageId);
@@ -163,59 +257,99 @@ function Sidebar() {
           </Button>
         </div>
 
+        {/* Role badge */}
+        <div className="px-4 pt-3 pb-1">
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-[10px] font-semibold px-2 py-0.5 w-full justify-center',
+              isSuperAdmin
+                ? 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+            )}
+          >
+            {isSuperAdmin ? 'Super Admin - Plateforme' : 'Admin Client'}
+          </Badge>
+        </div>
+
         {/* Navigation */}
-        <ScrollArea className="flex-1 px-3 py-4">
+        <ScrollArea className="flex-1 px-3 py-2">
           <nav className="flex flex-col gap-1">
-            {filteredNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentPage === item.id;
-              return (
-                <TooltipProvider key={item.id} delayDuration={0}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => handleNavClick(item.id)}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                          isActive
-                            ? 'shadow-sm'
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                        )}
-                        style={isActive ? {
-                          backgroundColor: 'hsl(var(--org-primary) / 0.08)',
-                          color: 'var(--org-primary, hsl(var(--primary)))',
-                        } : undefined}
-                      >
-                        <Icon
-                          className={cn(
-                            'h-5 w-5 shrink-0',
-                            isActive
-                              ? ''
-                              : 'text-muted-foreground'
-                          )}
-                          style={isActive ? { color: 'var(--org-primary, hsl(var(--primary)))' } : undefined}
-                        />
-                        <span className="flex-1 text-left">{item.label}</span>
-                        {item.badge && (
-                          <Badge
-                            variant="secondary"
-                            className="h-5 px-1.5 text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+            {navGroups.map((group) => (
+              <React.Fragment key={group.title}>
+                <p className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  {group.title}
+                </p>
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentPage === item.id;
+                  return (
+                    <TooltipProvider key={item.id} delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleNavClick(item.id)}
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                              isActive
+                                ? 'shadow-sm'
+                                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                            )}
+                            style={isActive ? {
+                              backgroundColor: 'hsl(var(--org-primary) / 0.08)',
+                              color: 'var(--org-primary, hsl(var(--primary)))',
+                            } : undefined}
                           >
-                            {item.badge}
-                          </Badge>
-                        )}
-                        {isActive && (
-                          <ChevronRight className="h-4 w-4" style={{ color: 'var(--org-primary, hsl(var(--primary)))' }} />
-                        )}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="lg:hidden">
-                      {item.label}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              );
-            })}
+                            <Icon
+                              className={cn(
+                                'h-5 w-5 shrink-0',
+                                isActive
+                                  ? ''
+                                  : 'text-muted-foreground'
+                              )}
+                              style={isActive ? { color: 'var(--org-primary, hsl(var(--primary)))' } : undefined}
+                            />
+                            <span className="flex-1 text-left">{item.label}</span>
+                            {item.badge && (
+                              <Badge
+                                variant="secondary"
+                                className="h-5 px-1.5 text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                              >
+                                {item.badge}
+                              </Badge>
+                            )}
+                            {isActive && (
+                              <ChevronRight className="h-4 w-4" style={{ color: 'var(--org-primary, hsl(var(--primary)))' }} />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="lg:hidden">
+                          {item.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+
+            {/* Support button for Admin Client (simple "Contacter support") */}
+            {!isSuperAdmin && (
+              <React.Fragment>
+                <div className="my-2" />
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setCurrentPage('support');
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  <span className="text-sm">Contacter le support</span>
+                </Button>
+              </React.Fragment>
+            )}
           </nav>
         </ScrollArea>
 
@@ -234,7 +368,7 @@ function Sidebar() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
               <p className="text-[11px] text-muted-foreground capitalize truncate">
-                {user?.role?.replace('_', ' ') || 'Unknown'}
+                {isSuperAdmin ? 'Super Admin' : user?.role?.replace('_', ' ') || 'Admin'}
               </p>
             </div>
           </div>
@@ -267,6 +401,8 @@ function Sidebar() {
   );
 }
 
+// ── Plan Badge ─────────────────────────────────────────────────────────────
+
 function getPlanBadge(plan: Organization['subscriptionPlan']) {
   switch (plan) {
     case 'starter':
@@ -280,9 +416,12 @@ function getPlanBadge(plan: Organization['subscriptionPlan']) {
   }
 }
 
+// ── Organization Switcher ──────────────────────────────────────────────────
+
 function OrgSwitcher() {
   const { organizations, currentOrganization, setCurrentOrganization, setOrganizations } = useOrgStore();
   const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   const hasFetchedRef = useRef(false);
 
   useEffect(() => {
@@ -305,9 +444,11 @@ function OrgSwitcher() {
     }
   }, [token, organizations.length, setOrganizations]);
 
+  // Only Super Admin sees the org switcher
+  if (user?.role !== 'super_admin') return null;
+
   const handleSwitch = (org: Organization) => {
- setCurrentOrganization(org);
-    // Force refresh by reloading the page data
+    setCurrentOrganization(org);
     window.location.reload();
   };
 
@@ -365,11 +506,13 @@ function OrgSwitcher() {
   );
 }
 
+// ── Header ─────────────────────────────────────────────────────────────────
+
 function Header() {
   const { currentPage, setSidebarOpen } = useAppStore();
   const { user } = useAuthStore();
 
-  const pageTitle = navItems.find((item) => item.id === currentPage)?.label || 'Dashboard';
+  const pageTitle = getPageLabel(currentPage);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-6">
@@ -410,7 +553,7 @@ function Header() {
             <div className="text-right">
               <p className="text-sm font-medium leading-tight">{user?.name || 'User'}</p>
               <p className="text-[11px] text-muted-foreground capitalize leading-tight">
-                {user?.role?.replace('_', ' ') || 'Unknown'}
+                {user?.role === 'super_admin' ? 'Super Admin' : user?.role?.replace('_', ' ') || 'Admin'}
               </p>
             </div>
           </div>
@@ -419,6 +562,8 @@ function Header() {
     </header>
   );
 }
+
+// ── App Shell ──────────────────────────────────────────────────────────────
 
 interface AppShellProps {
   children: React.ReactNode;

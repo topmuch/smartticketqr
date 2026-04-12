@@ -490,3 +490,31 @@ Stage Summary:
 - Public URL: /?board=<orgSlug>
 - Seed data: 3 lines, 14 schedules created for demo
 - All tests passed, lint clean, zero errors
+---
+Task ID: 1
+Agent: Main Agent
+Task: Réorganiser le dashboard - séparation Super Admin (Plateforme) vs Admin Client (Business)
+
+Work Log:
+- Read app-shell.tsx (448 lines) — current flat navItems with roles array
+- Read page.tsx (166 lines) — pageComponents mapping all PageName types
+- Read app-store.ts (51 lines) — PageName type definition
+- Analyzed role system: super_admin vs admin/operator
+- Identified the problem: current roles: ['super_admin', 'admin'] makes ALL platform items visible to both
+- Rewrote app-shell.tsx with two separate navigation structures:
+  - SUPER_ADMIN_NAV (5 groups, 17 items): Core Platform, Security & System, Analytics, Infrastructure, Growth
+  - CLIENT_NAV (5 groups, 10 items): Core Business, Operations, Tracking, Settings, Logs
+- Removed from Admin Client: Organizations, Billing & Plans, Fraud Alerts, Audit Logs, Custom Domains, Automation, Affiliates
+- Added "Contacter le support" button at bottom of sidebar for Admin Client
+- Added role badge in sidebar showing "Super Admin - Plateforme" or "Admin Client"
+- OrgSwitcher now only visible for Super Admin
+- Added auto-redirect to dashboard if current page isn't accessible for role
+- Fixed React Hook conditional call (useEffect moved before early return in OrgSwitcher)
+- ESLint passes clean (0 errors, 0 warnings)
+
+Stage Summary:
+- File modified: src/components/smart-ticket/app-shell.tsx
+- No schema changes needed (role system already exists)
+- No changes to page.tsx or app-store.ts (all PageName types still valid)
+- Dev server compiles without errors
+- Security: Admin Client can no longer access platform-level modules
