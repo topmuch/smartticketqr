@@ -1,0 +1,378 @@
+/* ============================================================
+   🖨️ THERMAL PRINT STYLES — ticket-thermal.css
+   ============================================================
+   Optimized for 58mm and 80mm thermal printers.
+   - Zero margins, no padding, no colors (B&W only)
+   - Monospace font for perfect alignment
+   - Dashed cut lines for manual tearing
+   - @media print rules for clean browser printing
+   
+   Usage: Add class "thermal-print-58" or "thermal-print-80" 
+   to the print container, then call window.print()
+   ============================================================ */
+
+/* ---- Print container (hidden on screen, visible when printing) ---- */
+.thermal-print-container {
+  display: none;
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #000000;
+  background: #ffffff;
+  width: 80mm;
+  max-width: 80mm;
+}
+
+.thermal-print-container.thermal-print-58 {
+  width: 58mm;
+  max-width: 58mm;
+  font-size: 10px;
+}
+
+.thermal-print-container.thermal-print-80 {
+  width: 80mm;
+  max-width: 80mm;
+  font-size: 12px;
+}
+
+/* ---- Show only when printing ---- */
+@media print {
+  /* Hide everything except the thermal print container */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .thermal-print-container,
+  .thermal-print-container * {
+    visibility: visible !important;
+  }
+
+  .thermal-print-container {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .thermal-print-container.thermal-print-58 {
+    width: 58mm !important;
+    max-width: 58mm !important;
+  }
+
+  .thermal-print-container.thermal-print-80 {
+    width: 80mm !important;
+    max-width: 80mm !important;
+  }
+
+  /* ---- Page setup: zero margins, no headers/footers ---- */
+  @page {
+    size: 80mm auto;
+    margin: 0mm;
+    padding: 0mm;
+  }
+
+  /* ---- Remove backgrounds and shadows for clean print ---- */
+  .thermal-print-container * {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-color: #000000 !important;
+  }
+
+  /* ---- Prevent page breaks inside ticket ---- */
+  .thermal-ticket {
+    page-break-inside: avoid !important;
+    page-break-after: always !important;
+    break-inside: avoid !important;
+    break-after: page !important;
+  }
+
+  .thermal-ticket:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+}
+
+/* ---- Thermal ticket structure ---- */
+
+.thermal-ticket {
+  padding: 2mm;
+  font-family: 'Courier New', 'Lucida Console', monospace;
+}
+
+/* ---- Header / Org name ---- */
+.thermal-ticket-header {
+  text-align: center;
+  padding-bottom: 2mm;
+  border-bottom: 1px dashed #000;
+  margin-bottom: 2mm;
+}
+
+.thermal-ticket-header .org-name {
+  font-size: 16px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 1mm;
+}
+
+.thermal-print-58 .thermal-ticket-header .org-name {
+  font-size: 13px;
+}
+
+.thermal-ticket-header .ticket-type-badge {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  display: inline-block;
+  border: 1px solid #000;
+  padding: 0.5mm 2mm;
+  margin-top: 1mm;
+}
+
+.thermal-print-58 .thermal-ticket-header .ticket-type-badge {
+  font-size: 9px;
+  padding: 0.5mm 1.5mm;
+}
+
+/* ---- Event info ---- */
+.thermal-ticket-event {
+  margin-bottom: 2mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px solid #000;
+}
+
+.thermal-ticket-event .event-name {
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 1mm;
+  word-wrap: break-word;
+}
+
+.thermal-print-58 .thermal-ticket-event .event-name {
+  font-size: 12px;
+}
+
+.thermal-ticket-event .event-detail {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.5mm;
+}
+
+.thermal-print-58 .thermal-ticket-event .event-detail {
+  font-size: 9px;
+}
+
+/* ---- Holder info ---- */
+.thermal-ticket-holder {
+  margin-bottom: 2mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px dashed #000;
+}
+
+.thermal-ticket-holder .holder-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5mm;
+  color: #333;
+}
+
+.thermal-ticket-holder .holder-name {
+  font-size: 13px;
+  font-weight: bold;
+  margin-bottom: 1mm;
+}
+
+.thermal-print-58 .thermal-ticket-holder .holder-name {
+  font-size: 11px;
+}
+
+.thermal-ticket-holder .holder-detail {
+  font-size: 10px;
+  margin-bottom: 0.5mm;
+}
+
+.thermal-print-58 .thermal-ticket-holder .holder-detail {
+  font-size: 9px;
+}
+
+/* ---- Ticket details ---- */
+.thermal-ticket-details {
+  margin-bottom: 2mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px dashed #000;
+}
+
+.thermal-ticket-details .detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  margin-bottom: 0.5mm;
+}
+
+.thermal-print-58 .thermal-ticket-details .detail-row {
+  font-size: 9px;
+}
+
+.thermal-ticket-details .detail-row .detail-label {
+  color: #333;
+  text-transform: uppercase;
+  font-size: 8px;
+}
+
+.thermal-print-58 .thermal-ticket-details .detail-row .detail-label {
+  font-size: 7px;
+}
+
+.thermal-ticket-details .detail-row .detail-value {
+  font-weight: bold;
+  text-align: right;
+  font-family: 'Courier New', monospace;
+}
+
+/* ---- Price ---- */
+.thermal-ticket-price {
+  text-align: center;
+  padding: 3mm 0;
+  border-bottom: 1px dashed #000;
+  margin-bottom: 2mm;
+}
+
+.thermal-ticket-price .price-amount {
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.thermal-print-58 .thermal-ticket-price .price-amount {
+  font-size: 18px;
+}
+
+.thermal-ticket-price .price-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  color: #333;
+}
+
+/* ---- QR Code ---- */
+.thermal-ticket-qr {
+  text-align: center;
+  padding: 2mm 0;
+  margin-bottom: 2mm;
+}
+
+.thermal-ticket-qr img {
+  width: 38mm;
+  height: 38mm;
+  image-rendering: pixelated;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.thermal-print-58 .thermal-ticket-qr img {
+  width: 32mm;
+  height: 32mm;
+}
+
+.thermal-ticket-qr .qr-instruction {
+  font-size: 8px;
+  color: #333;
+  margin-top: 1mm;
+}
+
+/* ---- Status stamp (for used/cancelled tickets) ---- */
+.thermal-ticket-status {
+  text-align: center;
+  padding: 2mm;
+  margin: 2mm 0;
+}
+
+.thermal-ticket-status.status-used {
+  border: 2px solid #000;
+  transform: rotate(-5deg);
+  padding: 1mm 4mm;
+  display: inline-block;
+  font-weight: bold;
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.thermal-ticket-status.status-cancelled {
+  border: 2px solid #000;
+  transform: rotate(-5deg);
+  padding: 1mm 4mm;
+  display: inline-block;
+  font-weight: bold;
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+/* ---- Footer ---- */
+.thermal-ticket-footer {
+  text-align: center;
+  padding-top: 2mm;
+  border-top: 1px dashed #000;
+  margin-top: 2mm;
+}
+
+.thermal-ticket-footer .footer-text {
+  font-size: 8px;
+  color: #333;
+  margin-bottom: 0.5mm;
+  line-height: 1.3;
+}
+
+/* ---- Cut line (scissors indicator) ---- */
+.thermal-cut-line {
+  text-align: center;
+  padding: 3mm 0 1mm 0;
+  border-top: 1px dashed #000;
+  margin-top: 4mm;
+}
+
+.thermal-cut-line .cut-symbol {
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+/* ---- Separator lines ---- */
+.thermal-separator {
+  border: none;
+  border-top: 1px dashed #000;
+  margin: 2mm 0;
+}
+
+.thermal-separator-solid {
+  border: none;
+  border-top: 1px solid #000;
+  margin: 2mm 0;
+}
+
+/* ---- Print preview overlay (for screen testing) ---- */
+.thermal-print-preview {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.thermal-print-preview .thermal-print-container {
+  display: block;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}

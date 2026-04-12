@@ -56,10 +56,12 @@ import {
   X,
   MessageCircle,
   ClipboardCopy,
+  Printer,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
+import ThermalPrintButton from '@/components/smart-ticket/thermal-print-button';
 import { buildWhatsAppLink, generateTicketTextMessage } from '@/lib/whatsapp-service';
 
 // ==================== Types ====================
@@ -391,6 +393,7 @@ export default function TicketsPage() {
   const [qrOpen, setQrOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [thermalPrintOpen, setThermalPrintOpen] = useState(false);
 
   // Selected ticket
   const [selectedTicket, setSelectedTicket] = useState<TicketItem | null>(null);
@@ -1016,6 +1019,25 @@ export default function TicketsPage() {
                           >
                             <Download className="h-4 w-4" />
                           </Button>
+                          <ThermalPrintButton
+                            ticket={{
+                              id: ticket.id,
+                              ticketCode: ticket.ticketCode,
+                              ticketType: ticket.ticketType,
+                              holderName: ticket.holderName,
+                              holderEmail: ticket.holderEmail,
+                              holderPhone: ticket.holderPhone,
+                              seatNumber: ticket.seatNumber,
+                              price: ticket.price,
+                              currency: ticket.currency,
+                              status: ticket.status,
+                              issuedAt: ticket.issuedAt,
+                              event: ticket.event,
+                            }}
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                          />
                           {ticket.holderPhone && ticket.status === 'active' && (
                             <Button
                               variant="ghost"
@@ -1513,6 +1535,28 @@ export default function TicketsPage() {
               <Download className="h-4 w-4" />
               Download PDF Ticket
             </Button>
+            {selectedDetail && (
+              <ThermalPrintButton
+                ticket={{
+                  id: selectedDetail.id,
+                  ticketCode: selectedDetail.ticketCode,
+                  ticketType: selectedDetail.ticketType,
+                  holderName: selectedDetail.holderName,
+                  holderEmail: selectedDetail.holderEmail,
+                  holderPhone: selectedDetail.holderPhone,
+                  seatNumber: selectedDetail.seatNumber,
+                  price: selectedDetail.price,
+                  currency: selectedDetail.currency,
+                  status: selectedDetail.status,
+                  issuedAt: selectedDetail.issuedAt,
+                  event: selectedDetail.event,
+                }}
+                variant="outline"
+                size="default"
+                className="w-full sm:w-auto"
+                qrDataUrl={qrDataUrl}
+              />
+            )}
             <Button
               onClick={handleSendWhatsApp}
               disabled={!selectedDetail}

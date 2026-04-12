@@ -1,0 +1,16 @@
+{
+  "appId": "com.smartticketqr.app",
+  "appName": "SmartTicketQR",
+  "webDir": "out",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "POSPrinter": {
+      "defaultPaperWidth": 58,
+      "defaultDensity": 5,
+      "autoCut": true,
+      "codePage": "CP850"
+    }
+  }
+}

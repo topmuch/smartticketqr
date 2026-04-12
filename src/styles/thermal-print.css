@@ -1,0 +1,470 @@
+/**
+ * thermal-print.css
+ * =============================================================================
+ * Production-ready CSS for thermal receipt printing (58mm and 80mm paper).
+ *
+ * Usage:
+ *   - Apply `.thermal-print-58` or `.thermal-print-80` on the <html> or <body>
+ *     element to set the page size via @page rules.
+ *   - Structure your receipt with `.thermal-receipt`, `.thermal-receipt-header`,
+ *     `.thermal-receipt-body`, and `.thermal-receipt-footer`.
+ *   - Use the typography utilities (`.thermal-text-sm`, etc.) for consistent
+ *     sizing on small paper widths.
+ *   - Use `.thermal-screen-only` / `.thermal-print-only` to toggle visibility.
+ *   - Use `.thermal-print-btn` for an on-screen print trigger button.
+ *   - Use `.no-print` to hide any element during printing.
+ * =============================================================================
+ */
+
+/* =========================================================================
+   1. @page Rules — Define paper size and remove browser margins
+   ========================================================================= */
+
+@media print {
+  /* 58mm thermal paper (≈2.28 in) */
+  .thermal-print-58 {
+    size: 58mm auto;
+    margin: 0;
+  }
+
+  /* 80mm thermal paper (≈3.15 in) */
+  .thermal-print-80 {
+    size: 80mm auto;
+    margin: 0;
+  }
+}
+
+/* =========================================================================
+   2. @media print — Global print overrides
+   ========================================================================= */
+
+@media print {
+  /**
+   * Hide everything on the page except the receipt itself.
+   * Using :not() keeps the receipt visible while stripping away
+   * chrome, nav bars, modals, etc.
+   */
+  body *:not(.thermal-receipt):not(.thermal-receipt *):not(.thermal-print-only) {
+    display: none !important;
+  }
+
+  /* Reset all backgrounds to white for clean thermal output */
+  *,
+  *::before,
+  *::after {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Remove decorative properties that waste ink / look messy */
+  * {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    text-shadow: none !important;
+  }
+
+  /* Strip colour borders — thermal printers only do black */
+  * {
+    border-color: #000 !important;
+  }
+
+  /* Force monospace font stack across the entire document */
+  html, body, div, span, p, td, th, li, h1, h2, h3, h4, h5, h6 {
+    font-family: "Courier New", Courier, monospace !important;
+  }
+
+  /* Ensure the body itself has no margin/padding */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Suppress browser-added headers, footers, and page numbers */
+  @page {
+    margin: 0;
+  }
+}
+
+/* =========================================================================
+   3. Receipt Layout Classes
+   ========================================================================= */
+
+/**
+ * `.thermal-receipt` — Main container for a receipt.
+ * On screen it centres the receipt with a subtle shadow for preview;
+ * in print the shadow is stripped (see §2 above).
+ */
+.thermal-receipt {
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 2mm;
+  font-family: "Courier New", Courier, monospace;
+  color: #000;
+  background: #fff;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* 58mm paper — usable width ≈ 48mm */
+.thermal-receipt.receipt-58 {
+  max-width: 48mm;
+}
+
+/* 80mm paper — usable width ≈ 72mm */
+.thermal-receipt.receipt-80 {
+  max-width: 72mm;
+}
+
+/**
+ * `.thermal-receipt-header` — Organisation name, logo, address.
+ * Centred by default; tweak with typography utilities.
+ */
+.thermal-receipt-header {
+  text-align: center;
+  padding-bottom: 2mm;
+}
+
+/**
+ * `.thermal-receipt-body` — Main ticket / receipt content area.
+ */
+.thermal-receipt-body {
+  padding: 2mm 0;
+}
+
+/**
+ * `.thermal-receipt-footer` — Closing section with cut-line.
+ */
+.thermal-receipt-footer {
+  padding-top: 2mm;
+  text-align: center;
+}
+
+/* =========================================================================
+   4. Typography Utilities
+   ========================================================================= */
+
+/* Extra-small — legal text, fine print */
+.thermal-text-xs {
+  font-size: 7px;
+  line-height: 1.3;
+}
+
+/* Small — standard receipt body text */
+.thermal-text-sm {
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+/* Medium — sub-headings, section labels */
+.thermal-text-md {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Large — organisation name, receipt title */
+.thermal-text-lg {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Extra-large — emphasis, highlights */
+.thermal-text-xl {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+/* 2× Extra-large — ticket / booking codes */
+.thermal-text-2xl {
+  font-size: 22px;
+  line-height: 1.3;
+  letter-spacing: 1px;
+}
+
+/* Bold weight */
+.thermal-bold {
+  font-weight: 700;
+}
+
+/* Alignment helpers */
+.thermal-center {
+  text-align: center;
+}
+
+.thermal-right {
+  text-align: right;
+}
+
+/* =========================================================================
+   5. Separators & Cut Lines
+   ========================================================================= */
+
+/**
+ * `.thermal-line` — Single dashed separator.
+ */
+.thermal-line {
+  border: none;
+  border-top: 1px dashed #000;
+  margin: 3mm 0;
+  height: 0;
+}
+
+/**
+ * `.thermal-double-line` — Double solid separator for emphasis.
+ */
+.thermal-double-line {
+  border: none;
+  border-top: 2px solid #000;
+  margin: 3mm 0;
+  height: 0;
+}
+
+/**
+ * `.thermal-cut-line` — Visual scissors cut guide.
+ * Renders as a centred dashed line with ✂ symbol on each end.
+ * Intended for screen preview; still prints cleanly as a dashed line.
+ */
+.thermal-cut-line {
+  border: none;
+  border-top: 1px dashed #000;
+  margin: 4mm 0;
+  height: 0;
+  position: relative;
+}
+
+.thermal-cut-line::before {
+  content: "✂";
+  position: absolute;
+  top: -9px;
+  left: 0;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.thermal-cut-line::after {
+  content: "✂";
+  position: absolute;
+  top: -9px;
+  right: 0;
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* =========================================================================
+   6. QR Code
+   ========================================================================= */
+
+/**
+ * `.thermal-qr` — Centred QR code image container.
+ * Set explicit width/height so the QR renders at a predictable size
+ * on the small paper. Thermal printers need high-contrast B&W.
+ */
+.thermal-qr {
+  display: block;
+  margin: 3mm auto;
+  text-align: center;
+}
+
+.thermal-qr img,
+.thermal-qr canvas,
+.thermal-qr svg {
+  display: block;
+  margin: 0 auto;
+  /* Ensure pure black & white for thermal head */
+  filter: grayscale(100%) contrast(100%);
+}
+
+/* 58mm paper — smaller QR */
+.receipt-58 .thermal-qr img,
+.receipt-58 .thermal-qr canvas,
+.receipt-58 .thermal-qr svg {
+  width: 150px;
+  height: 150px;
+}
+
+/* 80mm paper — larger QR */
+.receipt-80 .thermal-qr img,
+.receipt-80 .thermal-qr canvas,
+.receipt-80 .thermal-qr svg {
+  width: 200px;
+  height: 200px;
+}
+
+/* =========================================================================
+   7. Data Display — Rows, Labels, Values, Dividers
+   ========================================================================= */
+
+/**
+ * `.thermal-row` — Flex row with space-between for key/value pairs.
+ */
+.thermal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2mm;
+  line-height: 1.4;
+}
+
+/**
+ * `.thermal-label` — Descriptive label.
+ * On screen it renders in a lighter gray; in print it becomes black
+ * via the global colour override in §2, so we use font-weight to
+ * maintain visual hierarchy without relying on colour.
+ */
+.thermal-label {
+  color: #666;
+  font-weight: 400;
+}
+
+@media print {
+  .thermal-label {
+    color: #000;
+    font-weight: 400;
+  }
+}
+
+/**
+ * `.thermal-value` — Bold data value.
+ */
+.thermal-value {
+  font-weight: 700;
+  text-align: right;
+}
+
+/**
+ * `.thermal-divider` — Simple full-width horizontal line.
+ */
+.thermal-divider {
+  border: none;
+  border-top: 1px solid #000;
+  margin: 2mm 0;
+  height: 0;
+}
+
+/* =========================================================================
+   8. Status Badges
+   ========================================================================= */
+
+/**
+ * `.thermal-status` — Uppercase bordered badge.
+ * In print, all statuses share the same simple border because thermal
+ * printers cannot render colour differences.
+ */
+.thermal-status {
+  display: inline-block;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1mm 2mm;
+  border: 1px solid #000;
+  line-height: 1.3;
+}
+
+/* Active / valid */
+.thermal-status-active {
+  border: 1px solid #000;
+}
+
+/* Used / consumed */
+.thermal-status-used {
+  border: 1px solid #000;
+}
+
+/* Expired */
+.thermal-status-expired {
+  border: 1px solid #000;
+}
+
+/* =========================================================================
+   9. Visibility Toggles — Screen-only vs Print-only
+   ========================================================================= */
+
+/**
+ * `.thermal-screen-only` — Visible on screen, hidden during print.
+ * Useful for action buttons, decorative elements, etc.
+ */
+.thermal-screen-only {
+  display: block;
+}
+
+@media print {
+  .thermal-screen-only {
+    display: none !important;
+  }
+}
+
+/**
+ * `.thermal-print-only` — Hidden on screen, visible during print.
+ * Useful for print-specific footers, disclaimers, etc.
+ */
+.thermal-print-only {
+  display: none;
+}
+
+@media print {
+  .thermal-print-only {
+    display: block !important;
+  }
+}
+
+/**
+ * `.no-print` — Universal utility: hide any element during printing.
+ * Shortcut alias that can be applied anywhere in the page, not just
+ * inside the receipt container.
+ */
+.no-print {
+  display: block;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* =========================================================================
+   10. Print Button
+   ========================================================================= */
+
+/**
+ * `.thermal-print-btn` — Styled button for triggering window.print().
+ * Only visible on screen; automatically hidden during print via the
+ * global visibility rules above.
+ */
+.thermal-print-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: #000;
+  border: 1px solid #000;
+  border-radius: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  transition: opacity 0.15s ease;
+}
+
+.thermal-print-btn:hover {
+  opacity: 0.8;
+}
+
+.thermal-print-btn:active {
+  opacity: 0.6;
+}
+
+/* Hide print button in print context */
+@media print {
+  .thermal-print-btn {
+    display: none !important;
+  }
+}
