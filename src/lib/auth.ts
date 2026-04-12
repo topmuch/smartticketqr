@@ -1,7 +1,21 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'smartticketqr-super-secret-key-change-in-production-2024';
+// ─── Security: JWT secret MUST be set via environment variable ───
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: JWT_SECRET environment variable is not set. Aborting server start.');
+  }
+  // Dev-only: warn but allow (never use in production!)
+  console.warn(
+    '[SECURITY] JWT_SECRET not set — using insecure development key. ' +
+    'Set JWT_SECRET in .env for production use.'
+  );
+}
+
+/** Resolved secret: always a string, but will crash the process in production if missing */
+const _resolvedSecret = JWT_SECRET || 'dev-only-insecure-key-do-not-use-in-production';
 
 export interface JWTPayload {
   userId: string;
@@ -26,14 +40,14 @@ export function generateToken(payload: JWTPayload): string {
       role: payload.role,
       organizationId: payload.organizationId,
     },
-    JWT_SECRET,
-    { expiresIn: '7d' },
+    _resolvedSecret,
+    { expiresIn: '7d', algorithm: 'HS256' },
   );
 }
 
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return jwt.verify(token, _resolvedSecret, { algorithms: ['HS256'] }) as JWTPayload;
   } catch {
     return null;
   }

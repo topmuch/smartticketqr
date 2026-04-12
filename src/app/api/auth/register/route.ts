@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, generateToken } from '@/lib/auth';
 import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, tenantWhere } from '@/lib/api-helper';
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limiter';
 
 /**
  * Register a new user within an organization.
@@ -11,15 +12,43 @@ import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleC
  *     Only admin/super_admin can register users. First user of an org becomes super_admin.
  *  2. Self-service: if no Authorization header but body has `organizationId`,
  *     allow creating the first user of a new org (the registrant becomes super_admin).
+ *
+ * Security:
+ *  - Rate limited: 10 registrations per hour per IP
+ *  - Password strength validation (min 8 chars)
  */
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
+    // ─── Rate limiting: 10 registrations per hour per IP ───
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown';
+    const regRateKey = `register:ip:${clientIp}`;
+    const regRate = checkRateLimit(regRateKey, 10, 60 * 60 * 1000); // 10 per hour
+    if (!regRate.allowed) {
+      return NextResponse.json(
+        { error: 'Too many registration attempts. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            ...getRateLimitHeaders(regRate),
+            'Retry-After': String(Math.ceil(regRate.resetAt / 1000)),
+          },
+        }
+      );
+    }
+
     const body = await request.json();
     const { name, email, password, role } = body;
     const orgIdFromBody = body.organizationId;
 
     if (!name || !email || !password) {
       return corsResponse({ error: 'Name, email, and password are required' }, 400);
+    }
+
+    // Password strength validation
+    if (password.length < 8) {
+      return corsResponse({ error: 'Password must be at least 8 characters long' }, 400);
     }
 
     // --- Self-service mode: create first user of a new org ---

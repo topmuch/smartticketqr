@@ -7,8 +7,16 @@ import { getOrgSecret } from '@/lib/ticket-generator';
 /**
  * Seed demo data for a default organization.
  * Creates: 1 organization, 3 users, 6 events, ~300 tickets, scans, transactions, activity logs.
+ *
+ * ⚠️ SECURITY: This endpoint is DISABLED in production.
+ *    In development, it allows seeding demo data without authentication.
  */
 export async function POST(request: NextRequest) {
+  // ─── Security gate: block in production ───
+  if (process.env.NODE_ENV === 'production') {
+    return corsResponse({ error: 'Seed endpoint is disabled in production' }, 403);
+  }
+
   return withErrorHandler(async () => {
     // Check if demo organization already exists
     const existingOrg = await db.organization.findFirst({ where: { slug: 'demo' } });

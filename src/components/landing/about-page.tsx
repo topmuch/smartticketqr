@@ -94,17 +94,17 @@ export default function LandingAboutPage() {
       </section>
 
       {/* Our Story */}
-      <section className="py-16 md:py-20 bg-white">
+      <section className="py-16 md:py-20 bg-white dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <FadeIn>
               <Badge variant="outline" className="border-[#007BFF]/20 text-[#007BFF] bg-[#007BFF]/5 mb-4">
                 Notre histoire
               </Badge>
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6">
                 N&eacute; d&apos;une id&eacute;e simple
               </h2>
-              <div className="space-y-4 text-gray-600 leading-relaxed">
+              <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
                 <p>
                   En 2023, Moussa Ndiaye, alors directeur d&apos;une compagnie de bus interurbains &agrave; Dakar, perdait chaque mois plus de 15% de ses revenus &agrave; cause de la contrefa&ccedil;on de billets.
                 </p>
@@ -122,8 +122,8 @@ export default function LandingAboutPage() {
                   <div className="w-20 h-20 bg-[#007BFF] rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Lightbulb className="w-10 h-10 text-white" />
                   </div>
-                  <p className="text-gray-900 font-bold text-xl">Depuis 2023</p>
-                  <p className="text-gray-500 mt-1">Dakar, S&eacute;n&eacute;gal</p>
+                  <p className="text-gray-900 dark:text-gray-100 font-bold text-xl">Depuis 2023</p>
+                  <p className="text-gray-500 dark:text-gray-400 mt-1">Dakar, S&eacute;n&eacute;gal</p>
                 </div>
               </div>
             </FadeIn>
@@ -132,24 +132,24 @@ export default function LandingAboutPage() {
       </section>
 
       {/* Values */}
-      <section className="py-16 md:py-20 bg-gray-50">
+      <section className="py-16 md:py-20 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Nos valeurs</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">Les principes qui guident chacune de nos d&eacute;cisions.</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">Nos valeurs</h2>
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">Les principes qui guident chacune de nos d&eacute;cisions.</p>
           </FadeIn>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {values.map((v, i) => {
               const Icon = v.icon;
               return (
                 <FadeIn key={i} delay={i * 0.1}>
-                  <Card className="bg-white border-0 hover:shadow-md transition-all duration-300 hover:-translate-y-1 h-full">
+                  <Card className="bg-white dark:bg-gray-900 border-0 hover:shadow-md transition-all duration-300 hover:-translate-y-1 h-full">
                     <CardContent className="p-6">
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${v.color}`}>
                         <Icon className="w-7 h-7" />
                       </div>
-                      <h3 className="font-bold text-gray-900 mb-2">{v.title}</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">{v.desc}</p>
+                      <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-2">{v.title}</h3>
+                      <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{v.desc}</p>
                     </CardContent>
                   </Card>
                 </FadeIn>
@@ -176,31 +176,31 @@ export default function LandingAboutPage() {
       </section>
 
       {/* Team */}
-      <section className="py-16 md:py-20 bg-gray-50">
+      <section className="py-16 md:py-20 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn className="text-center mb-12">
             <Badge variant="outline" className="border-[#007BFF]/20 text-[#007BFF] bg-[#007BFF]/5 mb-4">
               L&apos;&eacute;quipe
             </Badge>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               Les esprits derri&egrave;re SmartTicketQR
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
               Une &eacute;quipe passionn&eacute;e, bas&eacute;e en Afrique, d&eacute;di&eacute;e &agrave; votre succ&egrave;s.
             </p>
           </FadeIn>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {team.map((member, i) => (
               <FadeIn key={i} delay={i * 0.1}>
-                <Card className="bg-white border-0 text-center hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                <Card className="bg-white dark:bg-gray-900 border-0 text-center hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   <CardContent className="p-6">
                     <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${member.color} flex items-center justify-center mx-auto mb-4`}>
                       <span className="text-white text-xl font-bold">
                         {member.name.split(' ').map((n) => n[0]).join('')}
                       </span>
                     </div>
-                    <h3 className="font-bold text-gray-900">{member.name}</h3>
-                    <p className="text-gray-500 text-sm mt-1">{member.role}</p>
+                    <h3 className="font-bold text-gray-900 dark:text-gray-100">{member.name}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{member.role}</p>
                   </CardContent>
                 </Card>
               </FadeIn>
@@ -210,17 +210,17 @@ export default function LandingAboutPage() {
       </section>
 
       {/* Partners */}
-      <section className="py-16 md:py-20 bg-white">
+      <section className="py-16 md:py-20 bg-white dark:bg-gray-900">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn className="text-center mb-10">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               Nos partenaires de paiement
             </h2>
           </FadeIn>
           <FadeIn delay={0.1}>
             <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
               {partners.map((p, i) => (
-                <div key={i} className="px-8 py-4 bg-gray-50 rounded-2xl text-gray-600 font-semibold hover:bg-gray-100 transition-colors">
+                <div key={i} className="px-8 py-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl text-gray-600 dark:text-gray-400 font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                   {p}
                 </div>
               ))}
@@ -230,13 +230,13 @@ export default function LandingAboutPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 md:py-20 bg-gray-50">
+      <section className="py-16 md:py-20 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <FadeIn>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               Rejoignez l&apos;aventure
             </h2>
-            <p className="text-gray-600 mb-8">
+            <p className="text-gray-600 dark:text-gray-400 mb-8">
               Commencez votre essai gratuit de 7 jours. Aucune carte bancaire requise.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -251,7 +251,7 @@ export default function LandingAboutPage() {
                 variant="outline"
                 size="lg"
                 onClick={() => handleNav('contact')}
-                className="w-full sm:w-auto border-gray-300 hover:border-[#007BFF] hover:text-[#007BFF] rounded-xl"
+                className="w-full sm:w-auto border-gray-300 dark:border-gray-600 hover:border-[#007BFF] hover:text-[#007BFF] rounded-xl"
               >
                 Nous contacter
               </Button>

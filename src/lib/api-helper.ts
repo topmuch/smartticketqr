@@ -4,9 +4,9 @@ import { verifyToken, type JWTPayload } from '@/lib/auth';
 // ============================================================
 // 🔐 TENANT ISOLATION MIDDLEWARE
 // ============================================================
-// Reads organization_id from the Authorization JWT + request header.
-// EVERY API route MUST call resolveTenant() before any DB query.
-// This prevents IDOR (Insecure Direct Object Reference) attacks.
+// Reads organization_id from the JWT payload ONLY (never trusts
+// client-supplied headers). EVERY API route MUST call resolveTenant()
+// before any DB query. This prevents IDOR attacks.
 // ============================================================
 
 export interface TenantContext {
@@ -22,9 +22,13 @@ export interface TenantContext {
  *
  * Flow:
  *  1. Verify JWT from Authorization header
- *  2. Read X-Organization-Id header (set by client)
- *  3. Verify the user belongs to the specified organization
+ *  2. Extract organizationId from JWT payload (server-verified)
+ *  3. Optionally: verify X-Organization-Id header matches JWT
  *  4. Return TenantContext with all required IDs
+ *
+ * ⚠️ SECURITY: organizationId is NEVER taken from client headers.
+ *    It is exclusively sourced from the JWT payload which was signed
+ *    by our server. This prevents IDOR (Insecure Direct Object Reference).
  */
 export function resolveTenant(request: NextRequest): TenantContext | NextResponse {
   // Step 1: Verify JWT token
@@ -39,16 +43,20 @@ export function resolveTenant(request: NextRequest): TenantContext | NextRespons
     return errorResponse('Invalid or expired token', 401);
   }
 
-  // Step 2: Read organization ID from header
-  const organizationId = request.headers.get('x-organization-id');
-  if (!organizationId) {
-    return errorResponse('Organization ID is required. Set X-Organization-Id header.', 403);
+  // Step 2: Extract organizationId from JWT (server-signed, tamper-proof)
+  if (!payload.organizationId) {
+    return errorResponse('Token missing organization context', 401);
   }
 
-  // Step 3: Build tenant context
-  // Note: In a production system, you would also verify that the user
-  // actually belongs to the specified organization via a DB query.
-  // For now, we trust the client-set header (mitigated by frontend logic).
+  const organizationId = payload.organizationId;
+
+  // Step 3 (defensive): If client sends X-Organization-Id, verify it matches.
+  // This catches frontend bugs where the wrong org is selected in the UI.
+  const clientOrgId = request.headers.get('x-organization-id');
+  if (clientOrgId && clientOrgId !== organizationId) {
+    return errorResponse('Organization mismatch — access denied', 403);
+  }
+
   return {
     userId: payload.userId,
     email: payload.email,
@@ -151,7 +159,7 @@ export function tenantWhereWith(
 }
 
 // ============================================================
-// ERROR HANDLER
+// ERROR HANDLER (sanitized for production)
 // ============================================================
 
 export async function withErrorHandler(fn: () => Promise<NextResponse>): Promise<NextResponse> {
@@ -159,7 +167,12 @@ export async function withErrorHandler(fn: () => Promise<NextResponse>): Promise
     return await fn();
   } catch (error) {
     console.error('[Tenant API Error]', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    const message = isProduction
+      ? 'Internal server error'
+      : (error instanceof Error ? error.message : 'Internal server error');
+
     return corsResponse({ error: message }, 500);
   }
 }

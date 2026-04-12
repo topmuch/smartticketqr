@@ -1,27 +1,20 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { buildEscPosTicket, encodeForRawBT, createReceipt, type EscPosTicketData } from '@/lib/escpos-commands';
-import { verifyAuth } from '@/lib/auth';
-import { corsResponse, handleCors } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, corsResponse, handleCors } from '@/lib/api-helper';
 
 // ============================================================
 // GET /api/tickets/print?id=<ticketId>&format=escpos|base64|rawbt
 // ============================================================
 // Returns thermal printer data for a ticket.
-// Formats:
-//   - escpos  : Raw binary ESC/POS Uint8Array (application/octet-stream)
-//   - base64  : Base64-encoded ESC/POS (application/json)
-//   - rawbt   : RawBT URI string (application/json)
-//   - html    : Print-optimized HTML (text/html)
+// Requires authenticated user with matching organization.
 // ============================================================
 
 export async function GET(request: NextRequest) {
   try {
-    // Auth check
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return corsResponse({ error: authResult.error }, authResult.status);
-    }
+    // Auth + tenant isolation check
+    const tenant = resolveTenant(request);
+    if (isErrorResponse(tenant)) return tenant;
 
     const { searchParams } = new URL(request.url);
     const ticketId = searchParams.get('id');
@@ -31,9 +24,12 @@ export async function GET(request: NextRequest) {
       return corsResponse({ error: 'Ticket ID is required' }, 400);
     }
 
-    // Fetch ticket with event and org
-    const ticket = await db.ticket.findUnique({
-      where: { id: ticketId },
+    // Fetch ticket scoped to user's organization (IDOR protection)
+    const ticket = await db.ticket.findFirst({
+      where: {
+        id: ticketId,
+        event: { organizationId: tenant.organizationId },
+      },
       include: {
         event: true,
         organization: true,

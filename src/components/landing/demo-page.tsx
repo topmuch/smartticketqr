@@ -97,7 +97,7 @@ export default function LandingDemoPage() {
       </section>
 
       {/* Video Demo */}
-      <section className="py-16 md:py-20 bg-gray-50">
+      <section className="py-16 md:py-20 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn>
             <div className="relative bg-gray-900 rounded-3xl overflow-hidden shadow-2xl aspect-video flex items-center justify-center">
@@ -115,13 +115,13 @@ export default function LandingDemoPage() {
       </section>
 
       {/* Screenshots Gallery */}
-      <section className="py-16 md:py-20 bg-white">
+      <section className="py-16 md:py-20 bg-white dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               Aper&ccedil;u de la plateforme
             </h2>
-            <p className="text-gray-600 text-center max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-400 text-center max-w-2xl mx-auto">
               D&eacute;couvrez les &eacute;crans principaux de SmartTicketQR.
             </p>
           </FadeIn>
@@ -147,8 +147,8 @@ export default function LandingDemoPage() {
                       </div>
                     )}
                     <CardContent className="p-4">
-                      <h3 className="font-bold text-gray-900 text-sm">{ss.title}</h3>
-                      <p className="text-gray-500 text-xs mt-1">{ss.desc}</p>
+                      <h3 className="font-bold text-gray-900 dark:text-gray-100 text-sm">{ss.title}</h3>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{ss.desc}</p>
                     </CardContent>
                   </Card>
                 </FadeIn>
@@ -159,13 +159,13 @@ export default function LandingDemoPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 md:py-20 bg-gray-50">
+      <section className="py-16 md:py-20 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <FadeIn>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               Pr&ecirc;t &agrave; essayer SmartTicketQR&thinsp;?
             </h2>
-            <p className="text-gray-600 mb-8">
+            <p className="text-gray-600 dark:text-gray-400 mb-8">
               Commencez votre essai gratuit de 7 jours. Aucune carte bancaire requise.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -180,7 +180,7 @@ export default function LandingDemoPage() {
                 variant="outline"
                 size="lg"
                 onClick={() => handleNav('contact')}
-                className="w-full sm:w-auto border-gray-300 hover:border-[#007BFF] hover:text-[#007BFF] rounded-xl"
+                className="w-full sm:w-auto border-gray-300 dark:border-gray-600 hover:border-[#007BFF] hover:text-[#007BFF] rounded-xl"
               >
                 Demander une d&eacute;mo personnalis&eacute;e
               </Button>

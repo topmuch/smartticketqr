@@ -203,7 +203,7 @@ export default function PricingPage() {
       </section>
 
       {/* Plans */}
-      <section className="py-16 md:py-20 bg-gray-50">
+      <section className="py-16 md:py-20 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-3 gap-6 md:gap-8 items-start">
             {plans.map((plan, i) => {
@@ -215,7 +215,7 @@ export default function PricingPage() {
                     className={`relative transition-all duration-300 hover:-translate-y-1 h-full ${
                       plan.popular
                         ? 'bg-[#007BFF] text-white shadow-xl shadow-[#007BFF]/25 scale-[1.02] md:scale-105 border-0'
-                        : 'bg-white border-gray-200 hover:border-[#007BFF]/30 hover:shadow-lg'
+                        : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-[#007BFF]/30 hover:shadow-lg'
                     }`}
                   >
                     <CardContent className="p-6 md:p-8">
@@ -237,7 +237,7 @@ export default function PricingPage() {
                         </div>
                         <h3
                           className={`text-xl font-bold ${
-                            plan.popular ? 'text-white' : 'text-gray-900'
+                            plan.popular ? 'text-white' : 'text-gray-900 dark:text-gray-100'
                           }`}
                         >
                           {plan.name}
@@ -245,7 +245,7 @@ export default function PricingPage() {
                       </div>
                       <p
                         className={`text-sm mb-6 ${
-                          plan.popular ? 'text-blue-100' : 'text-gray-500'
+                          plan.popular ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
                         }`}
                       >
                         {plan.desc}
@@ -256,7 +256,7 @@ export default function PricingPage() {
                         {price === '' ? (
                           <p
                             className={`text-4xl font-extrabold ${
-                              plan.popular ? 'text-white' : 'text-gray-900'
+                              plan.popular ? 'text-white' : 'text-gray-900 dark:text-gray-100'
                             }`}
                           >
                             Sur mesure
@@ -265,14 +265,14 @@ export default function PricingPage() {
                           <div className="flex items-baseline gap-1">
                             <span
                               className={`text-5xl font-extrabold ${
-                                plan.popular ? 'text-white' : 'text-gray-900'
+                                plan.popular ? 'text-white' : 'text-gray-900 dark:text-gray-100'
                               }`}
                             >
                               {price}
                             </span>
                             <span
                               className={`text-sm ${
-                                plan.popular ? 'text-blue-100' : 'text-gray-500'
+                                plan.popular ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
                               }`}
                             >
                               {plan.period}
@@ -282,7 +282,7 @@ export default function PricingPage() {
                         {annual && price !== '' && (
                           <p
                             className={`text-xs mt-1 ${
-                              plan.popular ? 'text-blue-200' : 'text-gray-400'
+                              plan.popular ? 'text-blue-200' : 'text-gray-400 dark:text-gray-500'
                             }`}
                           >
                             Factur&eacute; annuellement
@@ -310,8 +310,8 @@ export default function PricingPage() {
                                     ? 'text-blue-50'
                                     : 'text-blue-200/50'
                                   : f.included
-                                    ? 'text-gray-700'
-                                    : 'text-gray-400'
+                                    ? 'text-gray-700 dark:text-gray-300'
+                                    : 'text-gray-400 dark:text-gray-500'
                               }
                             >
                               {f.label}
@@ -328,7 +328,7 @@ export default function PricingPage() {
                         size="lg"
                         className={`w-full py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
                           plan.btnStyle === 'filled'
-                            ? 'bg-white text-[#007BFF] hover:bg-gray-100 shadow-lg'
+                            ? 'bg-white text-[#007BFF] hover:bg-gray-100 dark:hover:bg-gray-800 shadow-lg'
                             : plan.btnStyle === 'green'
                               ? 'bg-[#28A745] hover:bg-[#1E7E34] text-white shadow-md hover:shadow-lg'
                               : 'border-2 border-[#007BFF] text-[#007BFF] bg-transparent hover:bg-[#007BFF]/5'
@@ -346,36 +346,36 @@ export default function PricingPage() {
       </section>
 
       {/* Comparison Table */}
-      <section className="py-16 md:py-20 bg-white">
+      <section className="py-16 md:py-20 bg-white dark:bg-gray-900">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn className="text-center mb-10">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
               Comparaison d&eacute;taill&eacute;e
             </h2>
           </FadeIn>
           <FadeIn delay={0.1}>
-            <div className="overflow-x-auto rounded-2xl border border-gray-200">
+            <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-700">
               <table className="w-full min-w-[520px]">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="text-left p-4 md:p-5 text-sm font-semibold text-gray-900">
+                  <tr className="bg-gray-50 dark:bg-gray-800">
+                    <th className="text-left p-4 md:p-5 text-sm font-semibold text-gray-900 dark:text-gray-100">
                       Fonctionnalit&eacute;
                     </th>
-                    <th className="p-4 md:p-5 text-sm font-semibold text-gray-900 text-center">
+                    <th className="p-4 md:p-5 text-sm font-semibold text-gray-900 dark:text-gray-100 text-center">
                       Starter
                     </th>
                     <th className="p-4 md:p-5 text-sm font-semibold text-[#007BFF] text-center bg-[#007BFF]/5">
                       Pro
                     </th>
-                    <th className="p-4 md:p-5 text-sm font-semibold text-gray-900 text-center">
+                    <th className="p-4 md:p-5 text-sm font-semibold text-gray-900 dark:text-gray-100 text-center">
                       Enterprise
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {comparisonRows.map((row, i) => (
-                    <tr key={i} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-4 md:p-5 text-sm text-gray-700 font-medium">
+                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="p-4 md:p-5 text-sm text-gray-700 dark:text-gray-300 font-medium">
                         {row.label}
                       </td>
                       <td className="p-4 md:p-5 text-center">
@@ -397,17 +397,17 @@ export default function PricingPage() {
       </section>
 
       {/* Guarantee */}
-      <section className="py-12 bg-gray-50">
+      <section className="py-12 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <FadeIn>
-            <div className="bg-white rounded-2xl p-8 md:p-12 border border-gray-200 shadow-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 md:p-12 border border-gray-200 dark:border-gray-800 shadow-sm">
               <div className="w-16 h-16 bg-[#28A745]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Shield className="w-8 h-8 text-[#28A745]" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">
                 Satisfait ou rembours&eacute; 30 jours
               </h3>
-              <p className="text-gray-600 max-w-xl mx-auto">
+              <p className="text-gray-600 dark:text-gray-400 max-w-xl mx-auto">
                 Nous sommes convaincus de la qualit&eacute; de notre service. Si SmartTicketQR ne
                 r&eacute;pond pas &agrave; vos attentes dans les 30 premiers jours, nous vous rembourserons
                 int&eacute;gralement, sans condition.
@@ -418,10 +418,10 @@ export default function PricingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 md:py-20 bg-white">
+      <section className="py-16 md:py-20 bg-white dark:bg-gray-900">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn className="text-center mb-10">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
               Questions fr&eacute;quentes sur les tarifs
             </h2>
           </FadeIn>
@@ -431,12 +431,12 @@ export default function PricingPage() {
                 <AccordionItem
                   key={i}
                   value={`faq-${i}`}
-                  className="bg-gray-50 rounded-xl mb-3 px-6 border border-gray-200 overflow-hidden"
+                  className="bg-gray-50 dark:bg-gray-800 rounded-xl mb-3 px-6 border border-gray-200 dark:border-gray-700 overflow-hidden"
                 >
-                  <AccordionTrigger className="text-gray-900 font-semibold hover:no-underline py-5 text-left">
+                  <AccordionTrigger className="text-gray-900 dark:text-gray-100 font-semibold hover:no-underline py-5 text-left">
                     {item.q}
                   </AccordionTrigger>
-                  <AccordionContent className="text-gray-600 leading-relaxed pb-5">
+                  <AccordionContent className="text-gray-600 dark:text-gray-400 leading-relaxed pb-5">
                     {item.a}
                   </AccordionContent>
                 </AccordionItem>
@@ -447,10 +447,10 @@ export default function PricingPage() {
       </section>
 
       {/* Trust Badge */}
-      <section className="py-10 bg-gray-50">
+      <section className="py-10 bg-gray-50 dark:bg-gray-800/50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn>
-            <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10 text-sm text-gray-500">
+            <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10 text-sm text-gray-500 dark:text-gray-400">
               <span className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-[#007BFF]" />
                 Satisfait ou rembours&eacute; 30 jours

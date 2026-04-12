@@ -32,7 +32,14 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "SmartTicketQR Team" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "default",
+    "apple-mobile-web-app-title": "SmartTicketQR",
   },
   openGraph: {
     title: "SmartTicketQR - Digital Ticket Management",
@@ -49,6 +56,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" suppressHydrationWarning className="scroll-smooth">
+      <head>
+        <meta name="theme-color" content="#059669" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
