@@ -31,6 +31,7 @@ export const metadata: Metadata = {
     "digital tickets",
   ],
   authors: [{ name: "SmartTicketQR Team" }],
+  manifest: "/manifest.json",
   icons: {
     icon: "/icons/icon-192.png",
     apple: "/icons/icon-192.png",
