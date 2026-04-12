@@ -392,7 +392,7 @@ export default function LoginPage() {
                           </p>
                         </div>
                       </CardHeader>
-                      <CardContent className="px-0" asChild>
+                      <CardContent className="px-0">
                         <form onSubmit={handleLogin} className="space-y-4">
                           <div className="space-y-2">
                             <Label
@@ -501,7 +501,7 @@ export default function LoginPage() {
                           </p>
                         </div>
                       </CardHeader>
-                      <CardContent className="px-0" asChild>
+                      <CardContent className="px-0">
                         <form onSubmit={handleRegister} className="space-y-4">
                           <div className="space-y-2">
                             <Label

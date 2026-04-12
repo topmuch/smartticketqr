@@ -174,21 +174,25 @@ const SEVERITY_CONFIG: Record<string, { color: string; bgClass: string; textClas
   low: {
     color: 'slate',
     bgClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300',
+    textClass: 'text-slate-700 dark:text-slate-300',
     borderClass: 'border-slate-200 dark:border-slate-700',
   },
   medium: {
     color: 'amber',
     bgClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    textClass: 'text-amber-700 dark:text-amber-300',
     borderClass: 'border-amber-200 dark:border-amber-800',
   },
   high: {
     color: 'orange',
     bgClass: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    textClass: 'text-orange-700 dark:text-orange-300',
     borderClass: 'border-orange-200 dark:border-orange-800',
   },
   critical: {
     color: 'red',
     bgClass: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    textClass: 'text-red-700 dark:text-red-300',
     borderClass: 'border-red-200 dark:border-red-800',
   },
 };

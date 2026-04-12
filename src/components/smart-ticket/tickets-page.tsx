@@ -492,12 +492,13 @@ export default function TicketsPage() {
       setBulkProgress(10);
     },
     onSuccess: (res) => {
+      const r = res as { count?: number; tickets?: unknown[] };
       setBulkProgress(100);
       setTimeout(() => {
         setBulkGenerating(false);
         setBulkProgress(0);
         queryClient.invalidateQueries({ queryKey: ['tickets'] });
-        toast.success(`${res.count || res.tickets?.length || 0} tickets generated successfully`);
+        toast.success(`${r.count || r.tickets?.length || 0} tickets generated successfully`);
         setBulkOpen(false);
         setBulkForm({ eventId: '', count: 10, ticketType: 'Standard', price: '' });
       }, 600);

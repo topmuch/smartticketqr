@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyPassword, generateToken } from '@/lib/auth';
 import { corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';

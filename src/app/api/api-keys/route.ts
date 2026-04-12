@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       ? Math.min(rateLimit, 10000)
       : 100;
 
-    const parsedExpiresAt = expiresAt ? new Date(expiresAt) : null;
+    const parsedExpiresAt = expiresAt ? new Date(expiresAt) : undefined;
 
     if (parsedExpiresAt && isNaN(parsedExpiresAt.getTime())) {
       return corsResponse({ error: 'Invalid expiresAt date format' }, 400);

@@ -507,7 +507,7 @@ export default function Dashboard() {
                     <p className="text-2xl font-bold tracking-tight">{kpi.value}</p>
                     <p className="mt-0.5 text-muted-foreground text-xs">{kpi.label}</p>
                   </div>
-                  {(kpi as Record<string, unknown>).isProgress && (
+                  {!!(kpi as Record<string, unknown>).isProgress && (
                     <Progress value={(kpi as Record<string, unknown>).progressValue as number} className="mt-2 h-1.5" />
                   )}
                 </CardContent>

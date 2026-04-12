@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return corsResponse({ error: 'Maximum 100 scans per sync batch' }, 400);
     }
 
-    const results = [];
+    const results: Array<{ ticketCode: string; success: boolean; status: string; error?: string; holderName?: string; eventName?: string }> = [];
 
     for (const scan of scans) {
       try {

@@ -133,7 +133,7 @@ export async function generateApiKey(
 
   const permissions = options?.permissions ?? ['read'];
   const rateLimit = options?.rateLimit ?? 100;
-  const expiresAt = options?.expiresAt ?? null;
+  const expiresAt = options?.expiresAt ?? undefined;
 
   const apiKey = await db.apiKey.create({
     data: {
@@ -344,7 +344,7 @@ export async function rotateApiKey(
     const permissions: string[] = JSON.parse(existingKey.permissions);
     const newExpiresAt = existingKey.expiresAt
       ? new Date(Math.max(existingKey.expiresAt.getTime(), Date.now() + 30 * 24 * 60 * 60 * 1000))
-      : null;
+      : undefined;
 
     // Create the new key
     const newKey = await generateApiKey(rawPrefix, existingKey.organizationId, existingKey.name, {

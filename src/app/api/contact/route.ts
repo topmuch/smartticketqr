@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
 import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limiter';
 

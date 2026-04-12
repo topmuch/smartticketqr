@@ -673,7 +673,7 @@ export default function EventsPage() {
           </CardContent>
         </Card>
       ) : events.length === 0 ? (
-        <EmptyState onCreate={() => setShowCreateDialog(true)} />
+        <EmptyState onCreate={() => setShowCreateDialog(true)} search={search} />
       ) : (
         <>
           {/* Mobile: Card Grid */}
@@ -1308,7 +1308,7 @@ function EventTableRow({
   );
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({ onCreate, search }: { onCreate: () => void; search: string }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-center justify-center py-16 text-center">

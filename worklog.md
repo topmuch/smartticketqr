@@ -310,3 +310,26 @@ Stage Summary:
 - Kiosk displays connect via WebSocket for real-time validation updates
 - Public endpoint allows unauthenticated kiosk access (for TVs/monitors at event entrances)
 - Score progression: 47 → 80 → 90 → fully featured platform
+
+---
+
+Task ID: f1-f3
+Agent: Main Agent
+Task: Fix 10 TypeScript/ESLint issues across the SmartTicketQR project
+
+Work Log:
+- F1: Fixed `search` variable out-of-scope in `events-page.tsx` — `EmptyState` component defined outside `EventsPage` was referencing `search` state. Added `search` prop to `EmptyState` and passed it from parent.
+- F2: Re-exported `Locale` type from `src/lib/i18n/index.tsx` barrel file — `language-switcher.tsx` imports `Locale` from `@/lib/i18n` but it was only imported, not re-exported. Added `export type { Locale } from './translations'`.
+- F3: Added missing `NextResponse` import to 4 API routes that used `NextResponse.json()` for rate limit responses: `auth/forgot-password/route.ts`, `auth/login/route.ts`, `contact/route.ts`, `ticket/public/route.ts`.
+- F4: Added missing `textClass` property to all 4 entries (low, medium, high, critical) in `SEVERITY_CONFIG` object in `fraud-alerts-page.tsx`.
+- F5: Fixed `never[]` type inference on `results` array in `offline-sync/route.ts` — added explicit type annotation with all possible fields.
+- F6: Fixed `unknown` not assignable to `ReactNode` in `dashboard.tsx` — changed `(kpi as Record<string, unknown>).isProgress` to `!!(kpi as Record<string, unknown>).isProgress` to coerce to boolean.
+- F7: Fixed `unknown` type on `res` in `tickets-page.tsx` bulk mutation `onSuccess` — added type assertion `const r = res as { count?: number; tickets?: unknown[] }`.
+- F8: Fixed framer-motion `ease` type in 3 files by adding `as const` — `affiliates-page.tsx` (1 occurrence), `api-keys-page.tsx` (2 occurrences), `custom-domains-page.tsx` (1 occurrence). Changed `ease: 'easeOut'` to `ease: 'easeOut' as const`.
+- F9: Fixed `Date | null` vs `Date | undefined` mismatch — changed `null` fallbacks to `undefined` in `api-keys/route.ts` (parsedExpiresAt), `api-key-auth.ts` (generateApiKey expiresAt, rotateApiKey newExpiresAt).
+- F10: Removed invalid `asChild` prop from `<CardContent>` wrapping `<div>` elements in `login-page.tsx` (lines 395, 504).
+
+Stage Summary:
+- All 10 TypeScript/ESLint issues fixed with minimal, targeted changes
+- `bun run lint` passes with zero errors
+- Files modified: events-page.tsx, i18n/index.tsx, forgot-password/route.ts, login/route.ts, contact/route.ts, ticket/public/route.ts, fraud-alerts-page.tsx, offline-sync/route.ts, dashboard.tsx, tickets-page.tsx, affiliates-page.tsx, api-keys-page.tsx, custom-domains-page.tsx, api-keys/route.ts, api-key-auth.ts, login-page.tsx

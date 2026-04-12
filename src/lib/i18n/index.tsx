@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useCallback, useSyncExternalStore } from 'react';
 import { translations, type Locale, AVAILABLE_LOCALES, LOCALE_NAMES } from './translations';
 
+export type { Locale } from './translations';
+
 interface I18nContextType {
   locale: Locale;
   setLocale: (locale: Locale) => void;
