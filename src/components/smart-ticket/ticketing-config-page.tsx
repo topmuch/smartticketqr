@@ -74,6 +74,7 @@ interface FareType {
   ageMin: number | null;
   ageMax: number | null;
   maxPerBooking: number;
+  maxScans: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -121,6 +122,7 @@ interface FareTypeFormData {
   ageMin: string;
   ageMax: string;
   maxPerBooking: string;
+  maxScans: string;
 }
 
 interface TicketExtraFormData {
@@ -288,6 +290,7 @@ const INITIAL_FARE_FORM: FareTypeFormData = {
   ageMin: '',
   ageMax: '',
   maxPerBooking: '10',
+  maxScans: '1',
 };
 
 function FareTypesTab() {
@@ -323,6 +326,7 @@ function FareTypesTab() {
         ageMin: data.ageMin ? parseInt(data.ageMin, 10) : null,
         ageMax: data.ageMax ? parseInt(data.ageMax, 10) : null,
         maxPerBooking: parseInt(data.maxPerBooking, 10) || 10,
+        maxScans: parseInt(data.maxScans, 10) || 1,
       };
       const res = await fetch('/api/fare-types', {
         method: 'POST',
@@ -398,6 +402,7 @@ function FareTypesTab() {
     if (!data.slug.trim()) errors.slug = 'Le slug est requis';
     if (data.priceModifier < 0) errors.priceModifier = 'Le modificateur doit être ≥ 0';
     if (data.maxPerBooking && parseInt(data.maxPerBooking, 10) < 1) errors.maxPerBooking = 'Minimum 1';
+    if (data.maxScans && (parseInt(data.maxScans, 10) < 1 || parseInt(data.maxScans, 10) > 10)) errors.maxScans = 'Entre 1 et 10';
     if (data.requiresProof && !data.proofLabel.trim()) errors.proofLabel = 'Le libellé de justification est requis';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -497,6 +502,10 @@ function FareTypesTab() {
                       <p className="text-xs text-muted-foreground">Max/réservation</p>
                       <p className="font-medium">{ft.maxPerBooking}</p>
                     </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Scans max</p>
+                      <p className="font-medium">{ft.maxScans} {ft.maxScans > 1 ? '(aller-retour)' : '(simple)'}</p>
+                    </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t pt-3">
                     <Switch
@@ -537,6 +546,7 @@ function FareTypesTab() {
                     <TableHead>Justification</TableHead>
                     <TableHead>Tranche d&apos;âge</TableHead>
                     <TableHead className="text-center">Max/résa</TableHead>
+                    <TableHead className="text-center">Scans max</TableHead>
                     <TableHead className="text-center">Statut</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -567,6 +577,11 @@ function FareTypesTab() {
                           {ft.ageMin ?? 0}–{ft.ageMax ?? 99} ans
                         </TableCell>
                         <TableCell className="text-center font-medium">{ft.maxPerBooking}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={ft.maxScans > 1 ? 'outline' : 'secondary'} className={ft.maxScans > 1 ? 'border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-400' : ''}>
+                            {ft.maxScans}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-center">{getStatusBadge(ft.isActive)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -768,6 +783,25 @@ function FareTypesTab() {
                 className={formErrors.maxPerBooking ? 'border-red-500' : ''}
               />
               {formErrors.maxPerBooking && <p className="text-red-500 text-xs">{formErrors.maxPerBooking}</p>}
+            </div>
+
+            {/* Max Scans */}
+            <div className="space-y-2">
+              <Label htmlFor="fare-max-scans">Nombre de scans max</Label>
+              <Input
+                id="fare-max-scans"
+                type="number"
+                min="1"
+                max="10"
+                value={formData.maxScans}
+                onChange={(e) => updateField('maxScans', e.target.value)}
+                placeholder="1"
+                className={formErrors.maxScans ? 'border-red-500' : ''}
+              />
+              <p className="text-xs text-muted-foreground">
+                1 = billet simple, 2 = aller-retour
+              </p>
+              {formErrors.maxScans && <p className="text-red-500 text-xs">{formErrors.maxScans}</p>}
             </div>
 
             {/* Requires Proof */}

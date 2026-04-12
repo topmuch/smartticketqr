@@ -404,12 +404,12 @@ export async function POST(request: NextRequest) {
 
     // ─── Seed Fare Types ───────────────────────────────────────────
     const fareTypesData = [
-      { organizationId: orgId, slug: 'standard', name: 'Standard', emoji: '🎫', priceModifier: 1.0, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 50, isActive: true },
-      { organizationId: orgId, slug: 'child', name: 'Enfant', emoji: '👶', priceModifier: 0.50, requiresProof: false, proofLabel: '', ageMin: 0, ageMax: 12, maxPerBooking: 10, isActive: true },
-      { organizationId: orgId, slug: 'student', name: 'Étudiant', emoji: '🎓', priceModifier: 0.80, requiresProof: true, proofLabel: 'Carte étudiant', ageMin: 15, ageMax: 28, maxPerBooking: 10, isActive: true },
-      { organizationId: orgId, slug: 'senior', name: 'Senior', emoji: '🧓', priceModifier: 0.60, requiresProof: true, proofLabel: "Pièce d'identité", ageMin: 60, ageMax: null, maxPerBooking: 10, isActive: true },
-      { organizationId: orgId, slug: 'group', name: 'Groupe (5+)', emoji: '👥', priceModifier: 0.85, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 50, isActive: true },
-      { organizationId: orgId, slug: 'round_trip', name: 'Aller-Retour', emoji: '🔄', priceModifier: 2.0, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 10, isActive: true },
+      { organizationId: orgId, slug: 'standard', name: 'Standard', emoji: '🎫', priceModifier: 1.0, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 50, maxScans: 1, isActive: true },
+      { organizationId: orgId, slug: 'child', name: 'Enfant', emoji: '👶', priceModifier: 0.50, requiresProof: false, proofLabel: '', ageMin: 0, ageMax: 12, maxPerBooking: 10, maxScans: 1, isActive: true },
+      { organizationId: orgId, slug: 'student', name: 'Étudiant', emoji: '🎓', priceModifier: 0.80, requiresProof: true, proofLabel: 'Carte étudiant', ageMin: 15, ageMax: 28, maxPerBooking: 10, maxScans: 1, isActive: true },
+      { organizationId: orgId, slug: 'senior', name: 'Senior', emoji: '🧓', priceModifier: 0.60, requiresProof: true, proofLabel: "Pièce d'identité", ageMin: 60, ageMax: null, maxPerBooking: 10, maxScans: 1, isActive: true },
+      { organizationId: orgId, slug: 'group', name: 'Groupe (5+)', emoji: '👥', priceModifier: 0.85, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 50, maxScans: 1, isActive: true },
+      { organizationId: orgId, slug: 'round_trip', name: 'Aller-Retour', emoji: '🔄', priceModifier: 2.0, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 10, maxScans: 2, isActive: true },
     ];
     await db.fareType.createMany({ data: fareTypesData });
 

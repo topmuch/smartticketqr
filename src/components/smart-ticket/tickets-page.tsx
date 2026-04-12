@@ -62,6 +62,7 @@ import {
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
 import ThermalPrintButton from '@/components/smart-ticket/thermal-print-button';
+import TicketPurchaseDialog from '@/components/smart-ticket/ticket-purchase-dialog';
 import { buildWhatsAppLink, generateTicketTextMessage } from '@/lib/whatsapp-service';
 
 // ==================== Types ====================
@@ -389,6 +390,8 @@ export default function TicketsPage() {
 
   // Dialogs
   const [createOpen, setCreateOpen] = useState(false);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [purchaseDefaultEventId, setPurchaseDefaultEventId] = useState<string | undefined>();
   const [bulkOpen, setBulkOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -778,9 +781,9 @@ export default function TicketsPage() {
             <Send className="h-4 w-4" />
             <span className="hidden sm:inline">Bulk Generate</span>
           </Button>
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => { setPurchaseDefaultEventId(undefined); setPurchaseOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white">
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Create Ticket</span>
+            <span className="hidden sm:inline">Vendre un Billet</span>
           </Button>
         </div>
       </div>
@@ -1253,6 +1256,14 @@ export default function TicketsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ==================== Ticket Purchase Dialog (New Engine) ==================== */}
+      <TicketPurchaseDialog
+        open={purchaseOpen}
+        onOpenChange={(open) => { setPurchaseOpen(open); if (!open) setPurchaseDefaultEventId(undefined); }}
+        onSuccess={() => { queryClient.invalidateQueries({ queryKey: ['tickets'] }); queryClient.invalidateQueries({ queryKey: ['events-list-all'] }); }}
+        defaultEventId={purchaseDefaultEventId}
+      />
 
       {/* ==================== Bulk Generate Dialog ==================== */}
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>

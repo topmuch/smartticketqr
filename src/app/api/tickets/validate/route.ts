@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
         user: { select: { id: true, name: true } },
         fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true } },
         promoCode: { select: { id: true, code: true, type: true, value: true } },
-        scans: { select: { id: true, createdAt: true, result: true } },
+        scans: { select: { id: true, createdAt: true, result: true } }, // kept for backward compat audit trail
         ticketItems: {
           include: {
             extra: { select: { id: true, name: true, slug: true, emoji: true, pricingType: true } },
@@ -164,12 +164,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 7: Check ticket status (with round-trip support)
+    // Step 7: Check ticket status (with round-trip support via maxScans/usageCount)
     let scanStatus: 'valid' | 'used' | 'expired' | 'invalid' = 'valid';
     let statusMessage = 'Ticket validated successfully!';
-    const isRoundTrip = ticket.fareType?.slug === 'round_trip';
-    const scanCount = ticket.scans?.length || 0;
-    const roundTripMaxScans = isRoundTrip ? 2 : 1;
+    const maxScans = ticket.maxScans || 1;
+    const currentUsage = ticket.usageCount || 0;
+    const isRoundTrip = maxScans > 1;
 
     if (ticket.status === 'used' || ticket.status === 'completed') {
       scanStatus = 'used';
@@ -187,10 +187,12 @@ export async function POST(request: NextRequest) {
         where: { id: ticket.id },
         data: { status: 'expired' },
       });
-    } else if (isRoundTrip && scanCount >= roundTripMaxScans) {
-      // Round-trip ticket already scanned twice
+    } else if (currentUsage >= maxScans) {
+      // Ticket already used up all scans
       scanStatus = 'used';
-      statusMessage = 'Billet aller-retour déjà complété (2/2)';
+      statusMessage = isRoundTrip
+        ? 'Billet aller-retour déjà complété (2/2)'
+        : 'Ticket has already been used';
     }
 
     // Step 8: Geolocation check
@@ -218,24 +220,24 @@ export async function POST(request: NextRequest) {
 
     // Step 10: If valid, record scan (transactional)
     const isFinalScan = scanStatus === 'valid'
-      ? (isRoundTrip ? (scanCount + 1 >= roundTripMaxScans) : true)
+      ? (currentUsage + 1 >= maxScans)
       : false;
 
     if (scanStatus === 'valid') {
       const now = new Date();
 
       await db.$transaction(async (tx) => {
-        // For round-trip: mark as 'used' only on 2nd scan. For normal: always mark 'used'.
+        // For final scan: mark as 'used' + increment usageCount. For non-final: keep 'active' + increment.
         if (isFinalScan) {
           await tx.ticket.update({
             where: { id: ticket.id },
-            data: { status: 'used', validatedAt: now },
+            data: { status: 'used', validatedAt: now, usageCount: { increment: 1 } },
           });
         } else {
-          // Round-trip 1st scan: keep 'active', just set validatedAt for first leg
+          // Non-final scan (e.g. 1st leg of round-trip): keep status 'active', increment usageCount
           await tx.ticket.update({
             where: { id: ticket.id },
-            data: { validatedAt: now },
+            data: { validatedAt: now, usageCount: { increment: 1 } },
           });
         }
 
@@ -293,7 +295,7 @@ export async function POST(request: NextRequest) {
       message: isRoundTrip && scanStatus === 'valid'
         ? isFinalScan
           ? `Retour validé — Billet aller-retour complété (2/2)`
-          : `Aller validé (${scanCount + 1}/2) — Reste le retour`
+          : `Aller validé (${currentUsage + 1}/${maxScans}) — Reste le retour`
         : statusMessage,
       qr_verified: qrVerified,
       scan_id: scanLog.id,
@@ -331,8 +333,12 @@ export async function POST(request: NextRequest) {
               fareType: ticket.fareType || null,
               promoCode: ticket.promoCode || null,
               isRoundTrip,
-              scanCount,
-              roundTripRemaining: isRoundTrip ? Math.max(0, 2 - scanCount - 1) : 0,
+              usageCount: currentUsage,
+              maxScans,
+              roundTripRemaining: Math.max(0, maxScans - currentUsage - 1),
+              vehiclePlate: ticket.vehiclePlate || null,
+              vehicleType: ticket.vehicleType || null,
+              idProofNumber: ticket.idProofNumber || null,
               extras: (ticket.ticketItems || []).map((ti) => ({
                 name: ti.extra.name,
                 slug: ti.extra.slug,

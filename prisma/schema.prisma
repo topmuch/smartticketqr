@@ -128,6 +128,7 @@ model FareType {
   proofLabel      String   @default("")                    // "Carte étudiant", "PIèce identité"
   ageMin          Int?                                     // Enfant: 0-12, Senior: 60+
   ageMax          Int?
+  maxScans        Int      @default(1)                     // 1 = simple, 2 = aller-retour
   maxPerBooking   Int      @default(10)
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
@@ -308,11 +309,16 @@ model Ticket {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  fareTypeId    String?                                  // Fare type (student, child, senior, etc.)
-  promoCodeId   String?                                  // Applied promo code
-  basePrice     Float                                   // Original price before modifiers
-  extrasTotal   Float    @default(0)                     // Sum of extras
-  discountAmount Float    @default(0)                     // Promo discount
+  fareTypeId      String?                                  // Fare type (student, child, senior, etc.)
+  promoCodeId     String?                                  // Applied promo code
+  basePrice       Float                                   // Original price before modifiers
+  extrasTotal     Float    @default(0)                     // Sum of extras
+  discountAmount  Float    @default(0)                     // Promo discount
+  maxScans        Int      @default(1)                    // Max allowed scans (1=simple, 2=aller-retour)
+  usageCount      Int      @default(0)                    // Number of scans performed
+  vehiclePlate    String?                                  // Plaque immatriculation (ex: DK-1234-AB)
+  vehicleType     String?                                  // Berline, 4x4, Minibus, Utilitaire, Moto
+  idProofNumber   String?                                  // N° carte étudiant / pièce identité
 
   event        Event         @relation(fields: [eventId], references: [id])
   user         User?         @relation(fields: [userId], references: [id])

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     if (isErrorResponse(permCheck)) return permCheck;
 
     const body = await request.json();
-    const { slug, name, emoji, priceModifier, requiresProof, proofLabel, ageMin, ageMax, maxPerBooking } = body;
+    const { slug, name, emoji, priceModifier, requiresProof, proofLabel, ageMin, ageMax, maxPerBooking, maxScans } = body;
 
     if (!slug || !name) {
       return corsResponse({ error: 'slug and name are required' }, 400);
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
         ageMin: ageMin ? parseInt(ageMin) : null,
         ageMax: ageMax ? parseInt(ageMax) : null,
         maxPerBooking: parseInt(maxPerBooking) || 10,
+        maxScans: parseInt(maxScans) || 1,
       },
     });
 

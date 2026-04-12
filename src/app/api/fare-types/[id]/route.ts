@@ -15,7 +15,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { isActive, name, emoji, priceModifier, requiresProof, proofLabel, ageMin, ageMax, maxPerBooking } = body;
+    const { isActive, name, emoji, priceModifier, requiresProof, proofLabel, ageMin, ageMax, maxPerBooking, maxScans } = body;
 
     // Verify the fare type belongs to the tenant's org
     const existing = await db.fareType.findFirst({
@@ -35,6 +35,7 @@ export async function PUT(
     if (ageMin !== undefined) updateData.ageMin = ageMin ? parseInt(ageMin) : null;
     if (ageMax !== undefined) updateData.ageMax = ageMax ? parseInt(ageMax) : null;
     if (maxPerBooking !== undefined) updateData.maxPerBooking = parseInt(maxPerBooking) || 10;
+    if (maxScans !== undefined) updateData.maxScans = parseInt(maxScans) || 1;
 
     const fareType = await db.fareType.update({
       where: { id },

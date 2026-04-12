@@ -30,6 +30,8 @@ import {
   Tag,
   Percent,
   Gift,
+  Car,
+  ShieldCheck,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,6 +90,11 @@ interface ValidateResponse {
     isRoundTrip?: boolean;
     scanCount?: number;
     roundTripRemaining?: number;
+    usageCount?: number;
+    maxScans?: number;
+    vehiclePlate?: string;
+    vehicleType?: string;
+    idProofNumber?: string;
     extras?: Array<{
       name: string;
       slug: string;
@@ -1088,57 +1095,90 @@ export default function ScannerPage() {
                           </div>
                         )}
 
-                        {/* Round-Trip Progress Indicator */}
-                        {scanResult.ticket.isRoundTrip &&
-                          scanResult.ticket.scanCount != null &&
-                          scanResult.ticket.roundTripRemaining != null && (
-                            <div className="rounded-md border border-sky-200 bg-sky-50 p-2.5 dark:border-sky-800 dark:bg-sky-950/30">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <ArrowLeftRight className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                                <p className="text-xs font-medium text-sky-800 dark:text-sky-300">
-                                  Trajet Aller-Retour
+                        {/* Vehicle Info Badge */}
+                        {(scanResult.ticket.vehiclePlate || scanResult.ticket.vehicleType) && (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 text-xs border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/30"
+                          >
+                            <Car className="h-3 w-3" />
+                            🚗 {scanResult.ticket.vehicleType || 'Véhicule'}
+                            {scanResult.ticket.vehiclePlate ? ` — ${scanResult.ticket.vehiclePlate}` : ''}
+                          </Badge>
+                        )}
+
+                        {/* ID Proof Badge */}
+                        {scanResult.ticket.idProofNumber && (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 text-xs border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/30"
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            🪪 Carte: {scanResult.ticket.idProofNumber}
+                          </Badge>
+                        )}
+
+                        {/* Usage Counter & Round-Trip Progress Indicator */}
+                        {((scanResult.ticket.usageCount != null && scanResult.ticket.maxScans != null) ||
+                          (scanResult.ticket.scanCount != null && scanResult.ticket.roundTripRemaining != null)) && (
+                          (() => {
+                            const uCount = scanResult.ticket.usageCount ?? scanResult.ticket.scanCount ?? 0;
+                            const mScans = scanResult.ticket.maxScans ?? 1;
+                            const isRound = scanResult.ticket.isRoundTrip || mScans > 1;
+                            const remaining = scanResult.ticket.roundTripRemaining ?? Math.max(0, mScans - uCount);
+                            return (
+                              <div className={`rounded-md border p-2.5 ${isRound ? 'border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/30' : 'border-muted bg-muted/30'}`}>
+                                {isRound && (
+                                  <>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                      <ArrowLeftRight className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                                      <p className="text-xs font-medium text-sky-800 dark:text-sky-300">
+                                        Trajet Aller-Retour
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs">
+                                      <span
+                                        className={`flex items-center gap-1 ${
+                                          uCount >= 1
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : 'text-muted-foreground'
+                                        }`}
+                                      >
+                                        {uCount >= 1 ? (
+                                          <CheckCircle2 className="h-3.5 w-3.5" />
+                                        ) : (
+                                          <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/40" />
+                                        )}
+                                        Aller
+                                      </span>
+                                      <div className="flex-1 h-px bg-sky-200 dark:bg-sky-800" />
+                                      <span
+                                        className={`flex items-center gap-1 ${
+                                          uCount >= mScans
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : uCount >= 1
+                                              ? 'text-amber-600 dark:text-amber-400'
+                                              : 'text-muted-foreground'
+                                        }`}
+                                      >
+                                        {uCount >= mScans ? (
+                                          <CheckCircle2 className="h-3.5 w-3.5" />
+                                        ) : (
+                                          <div className="h-3.5 w-3.5 rounded-full border-2 border-current" />
+                                        )}
+                                        Retour
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                                <p className={`text-xs mt-1.5 ${isRound ? 'text-sky-600 dark:text-sky-400' : 'text-muted-foreground'}`}>
+                                  Utilisation: {Math.min(uCount, mScans)}/{mScans} scans
+                                  {remaining > 0 && isRound && ` · ${remaining} trajet(s) restant(s)`}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-3 text-xs">
-                                <span
-                                  className={`flex items-center gap-1 ${
-                                    scanResult.ticket.scanCount >= 1
-                                      ? 'text-emerald-600 dark:text-emerald-400'
-                                      : 'text-muted-foreground'
-                                  }`}
-                                >
-                                  {scanResult.ticket.scanCount >= 1 ? (
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/40" />
-                                  )}
-                                  Aller
-                                </span>
-                                <div className="flex-1 h-px bg-sky-200 dark:bg-sky-800" />
-                                <span
-                                  className={`flex items-center gap-1 ${
-                                    scanResult.ticket.scanCount >= 2
-                                      ? 'text-emerald-600 dark:text-emerald-400'
-                                      : scanResult.ticket.roundTripRemaining === 1
-                                        ? 'text-amber-600 dark:text-amber-400'
-                                        : 'text-muted-foreground'
-                                  }`}
-                                >
-                                  {scanResult.ticket.scanCount >= 2 ? (
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <div className="h-3.5 w-3.5 rounded-full border-2 border-current" />
-                                  )}
-                                  Retour
-                                </span>
-                              </div>
-                              <p className="text-xs text-sky-600 dark:text-sky-400 mt-1.5">
-                                Validation {Math.min(scanResult.ticket.scanCount, 2)}/2
-                                {scanResult.ticket.roundTripRemaining > 0 &&
-                                  ` · ${scanResult.ticket.roundTripRemaining} trajet(s) restant(s)`}
-                              </p>
-                            </div>
-                          )}
+                            );
+                          })()
+                        )}
 
                         {/* Price Display — Simple (no extras/fare/promo) */}
                         {scanResult.ticket.price != null &&

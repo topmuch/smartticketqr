@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         include: {
           event: { select: { id: true, name: true, type: true, startDate: true, endDate: true, location: true } },
           user: { select: { id: true, name: true, email: true } },
-          fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true } },
+          fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true, requiresProof: true, maxScans: true } },
           promoCode: { select: { id: true, code: true, type: true, value: true } },
           ticketItems: {
             include: {
@@ -72,10 +72,22 @@ export async function POST(request: NextRequest) {
       eventId, ticketType, holderName, holderEmail, holderPhone, seatNumber,
       price, currency,
       fareTypeId, extras, promoCode: promoCodeInput,
+      vehiclePlate, vehicleType, idProofNumber,
     } = body;
 
     if (!eventId || !holderName || !holderEmail) {
       return corsResponse({ error: 'Event ID, holder name, and holder email are required' }, 400);
+    }
+
+    // ── Vehicle validation ────────────────────────────────────
+    if ((vehicleType && !vehiclePlate) || (!vehicleType && vehiclePlate)) {
+      return corsResponse({ error: 'Both vehicleType and vehiclePlate must be provided together' }, 400);
+    }
+    if (vehicleType && vehicleType.trim() === '') {
+      return corsResponse({ error: 'vehicleType must not be empty' }, 400);
+    }
+    if (vehiclePlate && vehiclePlate.trim() === '') {
+      return corsResponse({ error: 'vehiclePlate must not be empty' }, 400);
     }
 
     // Verify event exists and belongs to tenant's org
@@ -97,6 +109,10 @@ export async function POST(request: NextRequest) {
     let fareTypeName = 'Standard';
 
     // Apply fare type modifier
+    let ticketMaxScans = 1; // default
+    let fareTypeRequiresProof = false;
+    let fareTypeProofLabel = '';
+
     if (fareTypeId) {
       const fareType = await db.fareType.findFirst({
         where: { id: fareTypeId, organizationId: tenant.organizationId, isActive: true },
@@ -104,7 +120,15 @@ export async function POST(request: NextRequest) {
       if (fareType) {
         fareModifier = fareType.priceModifier;
         fareTypeName = fareType.name;
+        ticketMaxScans = fareType.maxScans;
+        fareTypeRequiresProof = fareType.requiresProof;
+        fareTypeProofLabel = fareType.proofLabel;
       }
+    }
+
+    // ── ID proof validation ────────────────────────────────────
+    if (fareTypeRequiresProof && (!idProofNumber || idProofNumber.trim() === '')) {
+      return corsResponse({ error: `This fare type requires proof of eligibility. Please provide your ${fareTypeProofLabel || 'ID proof number'}.` }, 400);
     }
 
     const modifiedPrice = Math.round(basePrice * fareModifier * 100) / 100;
@@ -197,6 +221,11 @@ export async function POST(request: NextRequest) {
         basePrice,
         extrasTotal,
         discountAmount,
+        maxScans: ticketMaxScans,
+        usageCount: 0,
+        vehiclePlate: vehiclePlate && vehiclePlate.trim() ? vehiclePlate.trim() : null,
+        vehicleType: vehicleType && vehicleType.trim() ? vehicleType.trim() : null,
+        idProofNumber: idProofNumber && idProofNumber.trim() ? idProofNumber.trim() : null,
         ticketItems: {
           create: ticketItemsData,
         },
@@ -204,7 +233,7 @@ export async function POST(request: NextRequest) {
       include: {
         event: { select: { id: true, name: true, type: true, startDate: true, endDate: true, location: true } },
         user: { select: { id: true, name: true, email: true } },
-        fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true } },
+        fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true, requiresProof: true, maxScans: true } },
         promoCode: { select: { id: true, code: true, type: true, value: true } },
         ticketItems: {
           include: { extra: { select: { id: true, name: true, slug: true, emoji: true } } },
