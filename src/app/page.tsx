@@ -40,6 +40,7 @@ import LandingLoginPage from '@/components/landing/landing-login';
 import LandingRegisterPage from '@/components/landing/landing-register';
 import KioskDisplay from '@/components/smart-ticket/kiosk-display';
 import PublicDisplay from '@/components/smart-ticket/public-display';
+import PublicTicketView from '@/components/smart-ticket/public-ticket-view';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
   login: LoginPage,
@@ -88,19 +89,26 @@ export default function Home() {
   // ?board=xxx    → transport board display
   const [publicConfigId, setPublicConfigId] = React.useState<string | null>(null);
   const [boardSlug, setBoardSlug] = React.useState<string | null>(null);
+  const [ticketCode, setTicketCode] = React.useState<string | null>(null);
+  const [ticketOrg, setTicketOrg] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const configId = params.get('configId');
     const board = params.get('board');
+    const code = params.get('code');
+    const org = params.get('org');
     if (configId) {
       setPublicConfigId(configId);
     } else if (board) {
       setBoardSlug(board);
+    } else if (code && org) {
+      setTicketCode(code);
+      setTicketOrg(org);
     }
   }, []);
 
-  const isPublicMode = !!(publicConfigId || boardSlug);
+  const isPublicMode = !!(publicConfigId || boardSlug || ticketCode);
 
   // Verify token validity on mount
   useEffect(() => {
@@ -125,6 +133,12 @@ export default function Home() {
   }, [isAuthenticated, token, setCurrentPage, isPublicMode]);
 
   // ── Early returns (after all hooks) ──────────────────────────────────────
+
+  // Public ticket view mode: bypass auth entirely
+  // URL: ?code=TICKET_CODE&org=org-slug
+  if (ticketCode && ticketOrg) {
+    return <PublicTicketView ticketCode={ticketCode} orgSlug={ticketOrg} />;
+  }
 
   // Public transport board mode: bypass auth entirely
   if (boardSlug) {

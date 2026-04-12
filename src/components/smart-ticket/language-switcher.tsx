@@ -13,12 +13,14 @@ import { useTranslation } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 
 const LOCALE_FLAGS: Record<Locale, string> = {
-  fr: '🇫🇷',
-  en: '🇬🇧',
+  fr: '\u{1f1eb}\u{1f1f7}',
+  en: '\u{1f1ec}\u{1f1e7}',
+  pt: '\u{1f1f5}\u{1f1f9}',
+  es: '\u{1f1ea}\u{1f1f8}',
 };
 
 export function LanguageSwitcher() {
-  const { locale, setLocale, localeNames, availableLocales, t } = useTranslation();
+  const { locale, setLocale, localeNames, availableLocales } = useTranslation();
 
   return (
     <DropdownMenu>
@@ -33,7 +35,7 @@ export function LanguageSwitcher() {
           <Globe className="h-3.5 w-3.5 sm:hidden" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent align="end" className="w-44">
         {availableLocales.map((loc) => (
           <DropdownMenuItem
             key={loc}

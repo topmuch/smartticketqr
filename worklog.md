@@ -309,3 +309,44 @@ Stage Summary:
 - Complete seed data created (covers all fare types, extras, promo codes, vehicle tickets)
 - All 4 strategic decisions verified in code
 - Build verified: ESLint clean, Prisma sync, page compiles 200
+---
+Task ID: 5
+Agent: Main
+Task: CORRECTIF URGENT — Fix i18n (FR + PT/ES) and Ticket View infinite loading
+
+Work Log:
+- Diagnosed BUG #2 root cause: PublicTicketView component existed but was NEVER WIRED in page.tsx
+  - page.tsx only handled ?configId=xxx and ?board=xxx, not ?code=xxx&org=xxx
+  - Added ticketCode and ticketOrg state variables in page.tsx
+  - Added PublicTicketView import and conditional rendering before auth check
+  - Updated isPublicMode to include ticketCode check
+- Rewrote public-ticket-view.tsx with props-based approach (ticketCode, orgSlug)
+  - Added fetchWithTimeout (5s abort controller)
+  - Added comprehensive console.log debug traces (fetch start, status, success, error)
+  - Added error boundary with retry button (handleRetry)
+  - Added AbortError detection for timeout messages
+  - Added PDF download via print window (handleDownloadPDF)
+  - Added WhatsApp share via wa.me link (handleWhatsApp)
+  - Added AnimatePresence for full-screen QR modal
+  - 4 action buttons: PDF, QR Download, Copy, WhatsApp + Share
+- Diagnosed BUG #1 root cause: Only fr/en locales, missing pt/es
+  - Updated translations.ts: Locale type extended to 'fr'|'en'|'pt'|'es'
+  - AVAILABLE_LOCALES updated to ['fr','en','pt','es']
+  - LOCALE_NAMES updated with pt:'Português', es:'Español'
+  - Complete Portuguese (pt) translations added (~200 keys)
+  - Complete Spanish (es) translations added (~200 keys)
+  - i18n.portuguese and i18n.spanish keys added to all 4 locales
+- Updated i18n/index.tsx:
+  - Browser detection now handles pt (lang.startsWith('pt')) and es (lang.startsWith('es'))
+  - setLocaleSnapshot now also sets a cookie for server-side persistence
+- Updated language-switcher.tsx:
+  - Added pt flag 🇧🇷 and es flag 🇪🇸
+  - All 4 locales shown in dropdown
+
+Stage Summary:
+- BUG #2 FIXED: Public ticket view now renders correctly at /?code=XXX&org=YYY (HTTP 200)
+- BUG #1 FIXED: i18n now supports 4 languages (FR, EN, PT, ES) with full translations
+- LanguageSwitcher persists via localStorage + cookie
+- PDF download, WhatsApp share, QR download, Copy all functional
+- ESLint: 0 errors, 0 warnings
+- Dev server: compiles and renders successfully

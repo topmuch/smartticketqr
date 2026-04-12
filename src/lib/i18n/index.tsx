@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useCallback, useSyncExternalStore } from 'react';
 import { translations, type Locale, AVAILABLE_LOCALES, LOCALE_NAMES } from './translations';
 
 export type { Locale } from './translations';
@@ -19,6 +19,8 @@ function detectBrowserLocale(): Locale {
   if (typeof navigator === 'undefined') return 'fr';
   const lang = navigator.language.toLowerCase();
   if (lang.startsWith('fr')) return 'fr';
+  if (lang.startsWith('pt')) return 'pt';
+  if (lang.startsWith('es')) return 'es';
   return 'en';
 }
 
@@ -49,6 +51,10 @@ function setLocaleSnapshot(newLocale: Locale) {
   currentLocale = newLocale;
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('smartticket-lang', newLocale);
+  }
+  // Also set a cookie so server-side can read it
+  if (typeof document !== 'undefined') {
+    document.cookie = `smartticket-lang=${newLocale};path=/;max-age=31536000;SameSite=Lax`;
   }
   localeListeners.forEach((listener) => listener());
 }
