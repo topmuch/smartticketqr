@@ -164,7 +164,8 @@ export const PERMISSION_MATRIX: Record<ClientRole, Permission[]> = {
 export type NavPage = 
   | 'dashboard' | 'events' | 'tickets' | 'scanner' | 'display'
   | 'users' | 'transactions' | 'reports' | 'scan-logs'
-  | 'settings' | 'activity-logs' | 'api-keys' | 'webhooks';
+  | 'settings' | 'activity-logs' | 'api-keys' | 'webhooks'
+  | 'ticketing-config';
 
 export interface RoleNavItem {
   id: NavPage;
@@ -179,6 +180,7 @@ const ADMIN_NAV: RoleNavItem[] = [
   { id: 'scanner', label: 'QR Scanner', section: 'Vue d\'ensemble' },
   { id: 'display', label: 'Affichage Public', section: 'Vue d\'ensemble' },
   { id: 'users', label: 'Gérer l\'Équipe', section: 'Opérations' },
+  { id: 'ticketing-config', label: 'Tarifs & Options', section: 'Opérations' },
   { id: 'transactions', label: 'Transactions', section: 'Suivi' },
   { id: 'reports', label: 'Rapports & Analyses', section: 'Suivi' },
   { id: 'scan-logs', label: 'Logs de Scan', section: 'Suivi' },

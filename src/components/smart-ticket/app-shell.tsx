@@ -33,6 +33,7 @@ import {
   Handshake,
   Monitor,
   MessageSquare,
+  Tags,
   type LucideIcon,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -103,6 +104,7 @@ const PAGE_ICON_MAP: Record<string, LucideIcon> = {
   'activity-logs': Activity,
   'api-keys': KeyRound,
   webhooks: Webhook,
+  'ticketing-config': Tags,
 };
 
 // ── Super Admin Navigation (unchanged) ─────────────────────────────────────

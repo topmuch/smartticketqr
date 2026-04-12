@@ -130,6 +130,14 @@ export async function POST(request: NextRequest) {
           },
         },
         user: { select: { id: true, name: true } },
+        fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true } },
+        promoCode: { select: { id: true, code: true, type: true, value: true } },
+        scans: { select: { id: true, createdAt: true, result: true } },
+        ticketItems: {
+          include: {
+            extra: { select: { id: true, name: true, slug: true, emoji: true, pricingType: true } },
+          },
+        },
       },
     });
 
@@ -156,9 +164,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 7: Check ticket status
+    // Step 7: Check ticket status (with round-trip support)
     let scanStatus: 'valid' | 'used' | 'expired' | 'invalid' = 'valid';
     let statusMessage = 'Ticket validated successfully!';
+    const isRoundTrip = ticket.fareType?.slug === 'round_trip';
+    const scanCount = ticket.scans?.length || 0;
 
     if (ticket.status === 'used') {
       scanStatus = 'used';
@@ -267,7 +277,9 @@ export async function POST(request: NextRequest) {
       success: scanStatus === 'valid',
       status: scanStatus,
       sound_hint: scanStatus === 'valid' ? 'success' : 'error',
-      message: statusMessage,
+      message: isRoundTrip && scanStatus === 'valid'
+        ? `Aller validé (${scanCount}/2)`
+        : statusMessage,
       qr_verified: qrVerified,
       scan_id: scanLog.id,
       geo: geoCheck.hasGeoData
@@ -289,6 +301,9 @@ export async function POST(request: NextRequest) {
               holderPhone: ticket.holderPhone,
               seatNumber: ticket.seatNumber,
               price: ticket.price,
+              basePrice: ticket.basePrice,
+              extrasTotal: ticket.extrasTotal,
+              discountAmount: ticket.discountAmount,
               currency: ticket.currency,
               validatedAt: scanStatus === 'valid' ? new Date().toISOString() : ticket.validatedAt?.toISOString() || null,
               event: {
@@ -298,6 +313,20 @@ export async function POST(request: NextRequest) {
                 location: ticket.event.location,
                 startDate: ticket.event.startDate,
               },
+              fareType: ticket.fareType || null,
+              promoCode: ticket.promoCode || null,
+              isRoundTrip,
+              scanCount,
+              roundTripRemaining: isRoundTrip ? Math.max(0, 2 - scanCount - 1) : 0,
+              extras: (ticket.ticketItems || []).map((ti) => ({
+                name: ti.extra.name,
+                slug: ti.extra.slug,
+                emoji: ti.extra.emoji,
+                quantity: ti.quantity,
+                unitPrice: ti.unitPrice,
+                subtotal: Math.round(ti.unitPrice * ti.quantity * 100) / 100,
+                details: ti.details || '',
+              })),
             }
           : null,
     };

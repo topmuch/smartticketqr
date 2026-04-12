@@ -402,6 +402,35 @@ export async function POST(request: NextRequest) {
 
     await db.activityLog.createMany({ data: activityLogs });
 
+    // ─── Seed Fare Types ───────────────────────────────────────────
+    const fareTypesData = [
+      { organizationId: orgId, slug: 'standard', name: 'Standard', emoji: '🎫', priceModifier: 1.0, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 50, isActive: true },
+      { organizationId: orgId, slug: 'child', name: 'Enfant', emoji: '👶', priceModifier: 0.50, requiresProof: false, proofLabel: '', ageMin: 0, ageMax: 12, maxPerBooking: 10, isActive: true },
+      { organizationId: orgId, slug: 'student', name: 'Étudiant', emoji: '🎓', priceModifier: 0.80, requiresProof: true, proofLabel: 'Carte étudiant', ageMin: 15, ageMax: 28, maxPerBooking: 10, isActive: true },
+      { organizationId: orgId, slug: 'senior', name: 'Senior', emoji: '🧓', priceModifier: 0.60, requiresProof: true, proofLabel: "Pièce d'identité", ageMin: 60, ageMax: null, maxPerBooking: 10, isActive: true },
+      { organizationId: orgId, slug: 'group', name: 'Groupe (5+)', emoji: '👥', priceModifier: 0.85, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 50, isActive: true },
+      { organizationId: orgId, slug: 'round_trip', name: 'Aller-Retour', emoji: '🔄', priceModifier: 2.0, requiresProof: false, proofLabel: '', ageMin: null, ageMax: null, maxPerBooking: 10, isActive: true },
+    ];
+    await db.fareType.createMany({ data: fareTypesData });
+
+    // ─── Seed Ticket Extras ────────────────────────────────────────
+    const extrasData = [
+      { organizationId: orgId, slug: 'bagage_sup', name: 'Bagage supplémentaire', emoji: '🧳', pricingType: 'per_unit', basePrice: 500, requiresDetails: false, detailLabel: '', maxPerTicket: 3, isActive: true },
+      { organizationId: orgId, slug: 'velo', name: 'Vélo / Moto', emoji: '🚲', pricingType: 'fixed', basePrice: 1000, requiresDetails: true, detailLabel: "Type (vélo/moto)", maxPerTicket: 1, isActive: true },
+      { organizationId: orgId, slug: 'animal', name: 'Animal de compagnie', emoji: '🐕', pricingType: 'fixed', basePrice: 500, requiresDetails: true, detailLabel: "Type d'animal", maxPerTicket: 2, isActive: true },
+      { organizationId: orgId, slug: 'voiture', name: 'Voiture', emoji: '🚗', pricingType: 'fixed', basePrice: 15000, requiresDetails: true, detailLabel: 'Plaque immatriculation', maxPerTicket: 1, isActive: true },
+    ];
+    await db.ticketExtra.createMany({ data: extrasData });
+
+    // ─── Seed Promo Codes ──────────────────────────────────────────
+    const promosData = [
+      { organizationId: orgId, code: 'BIENVENUE10', type: 'percent', value: 10, minTickets: 1, validFrom: new Date(), validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), maxUses: 100, isActive: true },
+      { organizationId: orgId, code: 'GROUPE15', type: 'percent', value: 15, minTickets: 5, validFrom: new Date(), validUntil: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000), maxUses: 50, isActive: true },
+      { organizationId: orgId, code: 'FIDELITE500', type: 'fixed', value: 500, minTickets: 1, validFrom: new Date(), validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), maxUses: 200, isActive: true },
+      { organizationId: orgId, code: 'NOEL2025', type: 'percent', value: 20, minTickets: 1, validFrom: new Date('2025-12-01'), validUntil: new Date('2025-12-31'), maxUses: 500, isActive: true },
+    ];
+    await db.promoCode.createMany({ data: promosData });
+
     return corsResponse({
       message: 'Demo data seeded successfully',
       organization: {

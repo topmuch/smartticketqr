@@ -410,6 +410,9 @@ export default function TicketsPage() {
     seatNumber: '',
     price: '',
     currency: 'USD',
+    fareTypeId: '',
+    extras: [] as Array<{ extraId: string; quantity: number; details: string }>,
+    promoCode: '',
   });
 
   // Bulk form
@@ -466,8 +469,17 @@ export default function TicketsPage() {
       apiFetch('/api/tickets', {
         method: 'POST',
         body: JSON.stringify({
-          ...data,
+          eventId: data.eventId,
+          ticketType: data.ticketType,
+          holderName: data.holderName,
+          holderEmail: data.holderEmail,
+          holderPhone: data.holderPhone,
+          seatNumber: data.seatNumber,
           price: data.price ? parseFloat(data.price) : undefined,
+          currency: data.currency,
+          fareTypeId: data.fareTypeId || undefined,
+          extras: data.extras.length > 0 ? data.extras : undefined,
+          promoCode: data.promoCode || undefined,
         }),
       }),
     onSuccess: () => {
@@ -564,6 +576,9 @@ export default function TicketsPage() {
       seatNumber: '',
       price: '',
       currency: 'USD',
+      fareTypeId: '',
+      extras: [],
+      promoCode: '',
     });
   }, []);
 
@@ -1138,24 +1153,24 @@ export default function TicketsPage() {
 
       {/* ==================== Create Ticket Dialog ==================== */}
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) resetCreateForm(); }}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Ticket</DialogTitle>
-            <DialogDescription>Add a new ticket for an event. Required fields are marked.</DialogDescription>
+            <DialogTitle>Nouveau Ticket</DialogTitle>
+            <DialogDescription>Créez un ticket avec tarif, options et code promo.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
             {/* Event Select */}
             <div className="grid gap-2">
               <Label htmlFor="create-event">
-                Event <span className="text-red-500">*</span>
+                Événement <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={createForm.eventId}
                 onValueChange={handleEventSelectForCreate}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select an event" />
+                  <SelectValue placeholder="Sélectionner un événement" />
                 </SelectTrigger>
                 <SelectContent>
                   {events.filter((e) => e.status === 'active').map((e) => (
@@ -1167,116 +1182,73 @@ export default function TicketsPage() {
               </Select>
             </div>
 
-            {/* Ticket Type */}
-            <div className="grid gap-2">
-              <Label htmlFor="create-type">Ticket Type</Label>
-              <Select
-                value={createForm.ticketType}
-                onValueChange={(v) => setCreateForm((prev) => ({ ...prev, ticketType: v }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="VIP">VIP</SelectItem>
-                  <SelectItem value="Standard">Standard</SelectItem>
-                  <SelectItem value="One-way">One-way</SelectItem>
-                  <SelectItem value="Round-trip">Round-trip</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Fare Type Selection */}
+            <FareTypeSelector
+              eventId={createForm.eventId}
+              selectedFareTypeId={createForm.fareTypeId || ''}
+              onSelect={(fareTypeId) => {
+                setCreateForm((prev) => ({ ...prev, fareTypeId }));
+              }}
+            />
 
-            {/* Holder Name */}
-            <div className="grid gap-2">
-              <Label htmlFor="create-name">
-                Holder Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="create-name"
-                placeholder="Enter full name"
-                value={createForm.holderName}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, holderName: e.target.value }))}
-              />
-            </div>
-
-            {/* Holder Email */}
-            <div className="grid gap-2">
-              <Label htmlFor="create-email">
-                Holder Email <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="create-email"
-                type="email"
-                placeholder="Enter email address"
-                value={createForm.holderEmail}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, holderEmail: e.target.value }))}
-              />
-            </div>
-
-            {/* Holder Phone */}
-            <div className="grid gap-2">
-              <Label htmlFor="create-phone">Phone (optional)</Label>
-              <Input
-                id="create-phone"
-                type="tel"
-                placeholder="Enter phone number"
-                value={createForm.holderPhone}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, holderPhone: e.target.value }))}
-              />
-            </div>
-
-            {/* Seat Number */}
-            <div className="grid gap-2">
-              <Label htmlFor="create-seat">Seat Number (optional)</Label>
-              <Input
-                id="create-seat"
-                placeholder="e.g., A-12"
-                value={createForm.seatNumber}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, seatNumber: e.target.value }))}
-              />
-            </div>
-
-            {/* Price & Currency row */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Holder Info Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label htmlFor="create-price">Price</Label>
-                <Input
-                  id="create-price"
-                  type="number"
-                  step="0.01"
-                  placeholder="Auto from event"
-                  value={createForm.price}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
-                />
+                <Label htmlFor="create-name">Nom <span className="text-red-500">*</span></Label>
+                <Input id="create-name" placeholder="Nom complet" value={createForm.holderName}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, holderName: e.target.value }))} />
               </div>
               <div className="grid gap-2">
-                <Label>Currency</Label>
-                <Select
-                  value={createForm.currency}
-                  onValueChange={(v) => setCreateForm((prev) => ({ ...prev, currency: v }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="GBP">GBP</SelectItem>
-                    <SelectItem value="XOF">XOF</SelectItem>
-                    <SelectItem value="XAF">XAF</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="create-email">Email <span className="text-red-500">*</span></Label>
+                <Input id="create-email" type="email" placeholder="Adresse email" value={createForm.holderEmail}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, holderEmail: e.target.value }))} />
               </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="create-phone">Téléphone</Label>
+                <Input id="create-phone" type="tel" placeholder="+221 7X XXX XX XX" value={createForm.holderPhone}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, holderPhone: e.target.value }))} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create-seat">Siège</Label>
+                <Input id="create-seat" placeholder="A-12" value={createForm.seatNumber}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, seatNumber: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* Extras Toggle */}
+            <ExtrasSelector
+              eventId={createForm.eventId}
+              selectedExtras={createForm.extras || []}
+              onChange={(extras) => setCreateForm((prev) => ({ ...prev, extras }))}
+            />
+
+            {/* Promo Code */}
+            <PromoCodeInput
+              eventId={createForm.eventId}
+              onApply={(promoCode) => setCreateForm((prev) => ({ ...prev, promoCode }))}
+            />
+
+            {/* Price Summary */}
+            <PricingSummary
+              eventId={createForm.eventId}
+              fareTypeId={createForm.fareTypeId || ''}
+              extras={createForm.extras || []}
+              promoCode={createForm.promoCode || ''}
+              basePriceOverride={createForm.price ? parseFloat(createForm.price) : undefined}
+              currency={createForm.currency}
+            />
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>
-              Cancel
+              Annuler
             </Button>
-            <Button onClick={handleCreateSubmit} disabled={createMutation.isPending}>
+            <Button onClick={handleCreateSubmit} disabled={createMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create Ticket
+              Créer le Ticket
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1710,6 +1682,294 @@ export default function TicketsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ============================================================
+// Sub-components: Fare Type, Extras, Promo, Pricing
+// ============================================================
+
+function FareTypeSelector({ eventId, selectedFareTypeId, onSelect }: {
+  eventId: string;
+  selectedFareTypeId: string;
+  onSelect: (id: string) => void;
+}) {
+  const { data: fareTypesData } = useQuery<{ data: Array<{ id: string; slug: string; name: string; emoji: string; priceModifier: number; requiresProof: boolean; proofLabel: string; ageMin: number | null; ageMax: number | null }> }>({
+    queryKey: ['fare-types'],
+    queryFn: () => apiFetch('/api/fare-types'),
+    enabled: !!eventId,
+  });
+
+  const fareTypes = fareTypesData?.data || [];
+
+  if (!eventId || fareTypes.length === 0) return null;
+
+  return (
+    <div className="grid gap-2">
+      <Label>Type de Tarif</Label>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {fareTypes.map((ft) => {
+          const isSelected = selectedFareTypeId === ft.id;
+          const modifierPercent = Math.round((ft.priceModifier - 1) * 100);
+          return (
+            <button
+              key={ft.id}
+              type="button"
+              onClick={() => onSelect(isSelected ? '' : ft.id)}
+              className={`flex flex-col items-center gap-1 rounded-lg border-2 p-2.5 text-center transition-all ${
+                isSelected
+                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+                  : 'border-border hover:border-emerald-300 hover:bg-muted/30'
+              }`}
+            >
+              <span className="text-xl">{ft.emoji}</span>
+              <span className="text-xs font-medium leading-tight">{ft.name}</span>
+              <span className={`text-[10px] font-semibold ${modifierPercent < 0 ? 'text-emerald-600' : modifierPercent > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                {modifierPercent === 0 ? 'Plein tarif' : modifierPercent > 0 ? `+${modifierPercent}%` : `${modifierPercent}%`}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ExtrasSelector({ eventId, selectedExtras, onChange }: {
+  eventId: string;
+  selectedExtras: Array<{ extraId: string; quantity: number; details: string }>;
+  onChange: (extras: Array<{ extraId: string; quantity: number; details: string }>) => void;
+}) {
+  const { data: extrasData } = useQuery<{ data: Array<{ id: string; slug: string; name: string; emoji: string; pricingType: string; basePrice: number; requiresDetails: boolean; detailLabel: string; maxPerTicket: number }> }>({
+    queryKey: ['ticket-extras'],
+    queryFn: () => apiFetch('/api/ticket-extras'),
+    enabled: !!eventId,
+  });
+
+  const extras = extrasData?.data || [];
+
+  if (!eventId || extras.length === 0) return null;
+
+  const toggleExtra = (extraId: string) => {
+    const exists = selectedExtras.find((e) => e.extraId === extraId);
+    if (exists) {
+      onChange(selectedExtras.filter((e) => e.extraId !== extraId));
+    } else {
+      onChange([...selectedExtras, { extraId, quantity: 1, details: '' }]);
+    }
+  };
+
+  const updateQuantity = (extraId: string, qty: number) => {
+    onChange(selectedExtras.map((e) => e.extraId === extraId ? { ...e, quantity: Math.max(1, qty) } : e));
+  };
+
+  const updateDetails = (extraId: string, details: string) => {
+    onChange(selectedExtras.map((e) => e.extraId === extraId ? { ...e, details } : e));
+  };
+
+  const fmtFCFA = (n: number) => n.toLocaleString('fr-FR') + ' FCFA';
+
+  return (
+    <div className="grid gap-2">
+      <Label>Options Supplémentaires</Label>
+      <div className="space-y-2">
+        {extras.map((extra) => {
+          const selected = selectedExtras.find((e) => e.extraId === extra.id);
+          return (
+            <div key={extra.id} className={`rounded-lg border p-3 transition-all ${selected ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-border'}`}>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => toggleExtra(extra.id)}
+                  className="flex items-center gap-2 text-left"
+                >
+                  <span className="text-lg">{extra.emoji}</span>
+                  <div>
+                    <p className="text-sm font-medium">{extra.name}</p>
+                    <p className="text-xs text-muted-foreground">{fmtFCFA(extra.basePrice)}</p>
+                  </div>
+                </button>
+                {selected && (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => updateQuantity(extra.id, selected.quantity - 1)}
+                    >
+                      -
+                    </Button>
+                    <span className="text-sm font-semibold w-6 text-center">{selected.quantity}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => updateQuantity(extra.id, selected.quantity + 1)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {selected && extra.requiresDetails && (
+                <Input
+                  className="mt-2 h-8 text-xs"
+                  placeholder={extra.detailLabel || 'Détails...'}
+                  value={selected.details}
+                  onChange={(e) => updateDetails(extra.id, e.target.value)}
+                />
+              )}
+              {selected && (
+                <p className="text-xs text-emerald-600 font-medium mt-1">
+                  Sous-total: {fmtFCFA(extra.basePrice * selected.quantity)}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PromoCodeInput({ eventId, onApply }: {
+  eventId: string;
+  onApply: (code: string) => void;
+}) {
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+
+  const checkPromo = useCallback(async () => {
+    if (!code.trim() || !eventId) return;
+    setStatus('checking');
+    try {
+      const res = await fetch('/api/pricing/calculate', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ eventId, promoCode: code }),
+      });
+      const data = await res.json();
+      if (data.promo) {
+        setStatus('valid');
+        onApply(code.trim());
+      } else {
+        setStatus('invalid');
+      }
+    } catch {
+      setStatus('invalid');
+    }
+  }, [code, eventId, onApply]);
+
+  if (!eventId) return null;
+
+  return (
+    <div className="grid gap-2">
+      <Label>Code Promo</Label>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Input
+            placeholder="BIENVENUE10"
+            value={code}
+            onChange={(e) => { setCode(e.target.value.toUpperCase()); setStatus('idle'); }}
+            className={`font-mono text-sm uppercase ${status === 'valid' ? 'border-emerald-500' : status === 'invalid' ? 'border-red-500' : ''}`}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={checkPromo}
+          disabled={!code.trim() || status === 'checking'}
+        >
+          {status === 'checking' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Appliquer'}
+        </Button>
+      </div>
+      {status === 'valid' && <p className="text-xs text-emerald-600 font-medium">✅ Code promo appliqué</p>}
+      {status === 'invalid' && <p className="text-xs text-red-500">❌ Code invalide ou expiré</p>}
+    </div>
+  );
+}
+
+function PricingSummary({ eventId, fareTypeId, extras, promoCode, basePriceOverride, currency }: {
+  eventId: string;
+  fareTypeId: string;
+  extras: Array<{ extraId: string; quantity: number; details: string }>;
+  promoCode: string;
+  basePriceOverride?: number;
+  currency: string;
+}) {
+  const { data: pricing } = useQuery<{
+    basePrice: number;
+    modifiedPrice: number;
+    extrasTotal: number;
+    subtotal: number;
+    promo: { code: string; type: string; value: number; discount: number } | null;
+    total: number;
+    currency: string;
+  }>({
+    queryKey: ['pricing', eventId, fareTypeId, extras, promoCode],
+    queryFn: () =>
+      apiFetch('/api/pricing/calculate', {
+        method: 'POST',
+        body: JSON.stringify({ eventId, fareTypeId: fareTypeId || undefined, extras, promoCode: promoCode || undefined }),
+      }),
+    enabled: !!eventId,
+  });
+
+  if (!eventId || !pricing) return null;
+
+  const hasExtras = pricing.extrasTotal > 0;
+  const hasPromo = !!pricing.promo;
+  const hasFare = pricing.basePrice !== pricing.modifiedPrice;
+  const hasBreakdown = hasExtras || hasPromo || hasFare;
+
+  if (!hasBreakdown) {
+    return (
+      <div className="rounded-lg bg-muted/50 border p-3 flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">Total</span>
+        <span className="text-lg font-bold">{pricing.currency} {pricing.total.toLocaleString()}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Récapitulatif</p>
+      <div className="space-y-1 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Prix de base</span>
+          <span>{pricing.currency} {pricing.basePrice.toLocaleString()}</span>
+        </div>
+        {hasFare && (
+          <div className="flex justify-between text-emerald-600">
+            <span>Tarif appliqué</span>
+            <span>= {pricing.currency} {pricing.modifiedPrice.toLocaleString()}</span>
+          </div>
+        )}
+        {hasExtras && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Options</span>
+            <span>+ {pricing.currency} {pricing.extrasTotal.toLocaleString()}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-muted-foreground">
+          <span>Sous-total</span>
+          <span>{pricing.currency} {pricing.subtotal.toLocaleString()}</span>
+        </div>
+        {hasPromo && (
+          <div className="flex justify-between text-amber-600">
+            <span>🎁 Promo {pricing.promo!.code} ({pricing.promo!.type === 'percent' ? `${pricing.promo!.value}%` : `${pricing.promo!.value} FCFA`})</span>
+            <span>- {pricing.currency} {pricing.promo!.discount.toLocaleString()}</span>
+          </div>
+        )}
+        <div className="border-t pt-1 mt-1 flex justify-between font-bold text-base">
+          <span>TOTAL</span>
+          <span className="text-emerald-600">{pricing.currency} {pricing.total.toLocaleString()}</span>
+        </div>
+      </div>
     </div>
   );
 }

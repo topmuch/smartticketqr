@@ -29,3 +29,42 @@ Stage Summary:
 - Navigation dynamically filtered by role via app-shell.tsx
 - Dashboard adapts content per role (caisse sees "Ventes du Jour", controleur redirected to scanner, comptable sees "Tableau de Bord Financier")
 - Demo seed data: john@smartticketqr.com (admin), aminata@smartticketqr.com (caisse), ibrahima@smartticketqr.com (controleur), fatou@smartticketqr.com (comptable) — all password: Admin@123
+
+---
+Task ID: 2
+Agent: Main Orchestrator
+Task: Implement Modular Ticketing Engine for African market (fare types, extras, promo codes, pricing engine)
+
+Work Log:
+- Discovery: Read ALL existing files (prisma schema, tickets-page, scanner-page, events-page, dashboard, app-store, permissions, app-shell, api-helper, seed route)
+- Found Prisma schema already had 4 new models (FareType, TicketExtra, TicketItem, PromoCode) + Ticket extensions
+- Fixed missing reverse relation fields (tickets Ticket[]) on FareType and PromoCode models
+- Pushed DB schema successfully
+- Created 4 new API routes:
+  - GET/POST /api/fare-types (CRUD for fare types)
+  - GET/POST /api/ticket-extras (CRUD for ticket extras)
+  - GET/POST /api/promo-codes (CRUD for promo codes)
+  - POST /api/pricing/calculate (pricing engine)
+- Updated POST /api/tickets to accept fareTypeId, extras[], promoCode
+- Updated POST /api/tickets/validate to return fareType, promoCode, extras, isRoundTrip, scanCount
+- Updated seed with 6 fare types (standard, child, student, senior, group, round_trip)
+- Updated seed with 4 ticket extras (bagage_sup, velo, animal, voiture)
+- Updated seed with 4 promo codes (BIENVENUE10, GROUPE15, FIDELITE500, NOEL2025)
+- Added 'ticketing-config' page to app-store.ts, page.tsx, app-shell.tsx (icon: Tags), permissions.ts (NavPage type + admin nav)
+- Created ticketing-config-page.tsx (~1000 lines) with 3 tabs: Types de Tarif, Options Supplémentaires, Codes Promo
+- Enhanced tickets-page.tsx create dialog with: FareTypeSelector, ExtrasSelector, PromoCodeInput, PricingSummary
+- Updated scanner-page.tsx ValidateResponse with fareType, promoCode, extras, isRoundTrip, scanCount fields
+- Enhanced scanner result card with fare type badge, price breakdown, extras list, round-trip progress indicator
+
+Stage Summary:
+- Modular Ticketing Engine fully implemented
+- Pricing formula: base × fare_modifier + extras_total - promo_discount = total
+- 6 fare types: Standard (1x), Enfant (-50%), Étudiant (-20%), Senior (-40%), Groupe 5+ (-15%), Aller-Retour (2x)
+- 4 extras: Bagage (500 FCFA/unit), Vélo (1000 FCFA), Animal (500 FCFA), Voiture (15,000 FCFA)
+- 4 promo codes seeded: BIENVENUE10 (-10%), GROUPE15 (-15%), FIDELITE500 (-500 FCFA fixed), NOEL2025 (-20%)
+- Admin config page accessible from sidebar under "Opérations > Tarifs & Options"
+- Purchase flow: Event → Fare Type → Extras → Promo → Live Price Summary → Create
+- Scanner shows full ticket breakdown with extras, fare type, promo, and round-trip progress
+- ESLint: clean (0 errors)
+- TypeScript: 0 new errors (51 pre-existing in unrelated files)
+- Dev server: compiles successfully (Ready in 831ms)

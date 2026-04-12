@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
 
-    // Tenant filter through event's organizationId
     const where: Record<string, unknown> = {
       event: { organizationId: tenant.organizationId },
     };
@@ -35,6 +34,13 @@ export async function GET(request: NextRequest) {
         include: {
           event: { select: { id: true, name: true, type: true, startDate: true, endDate: true, location: true } },
           user: { select: { id: true, name: true, email: true } },
+          fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true } },
+          promoCode: { select: { id: true, code: true, type: true, value: true } },
+          ticketItems: {
+            include: {
+              extra: { select: { id: true, name: true, slug: true, emoji: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -58,12 +64,15 @@ export async function POST(request: NextRequest) {
     const tenant = resolveTenant(request);
     if (isErrorResponse(tenant)) return tenant;
 
-    // RBAC: Only admin and caisse can create/sell tickets
     const permCheck = requirePermission(tenant, 'tickets.sell');
     if (isErrorResponse(permCheck)) return permCheck;
 
     const body = await request.json();
-    const { eventId, ticketType, holderName, holderEmail, holderPhone, seatNumber, price, currency } = body;
+    const {
+      eventId, ticketType, holderName, holderEmail, holderPhone, seatNumber,
+      price, currency,
+      fareTypeId, extras, promoCode: promoCodeInput,
+    } = body;
 
     if (!eventId || !holderName || !holderEmail) {
       return corsResponse({ error: 'Event ID, holder name, and holder email are required' }, 400);
@@ -82,24 +91,124 @@ export async function POST(request: NextRequest) {
 
     const ticketCode = generateTicketCode();
 
+    // ── Pricing calculation ────────────────────────────────────
+    const basePrice = parseFloat(price) || event.price;
+    let fareModifier = 1.0;
+    let fareTypeName = 'Standard';
+
+    // Apply fare type modifier
+    if (fareTypeId) {
+      const fareType = await db.fareType.findFirst({
+        where: { id: fareTypeId, organizationId: tenant.organizationId, isActive: true },
+      });
+      if (fareType) {
+        fareModifier = fareType.priceModifier;
+        fareTypeName = fareType.name;
+      }
+    }
+
+    const modifiedPrice = Math.round(basePrice * fareModifier * 100) / 100;
+
+    // Calculate extras total
+    let extrasTotal = 0;
+    const ticketItemsData: Array<{
+      extraId: string;
+      quantity: number;
+      unitPrice: number;
+      details: string;
+    }> = [];
+
+    if (Array.isArray(extras) && extras.length > 0) {
+      for (const item of extras) {
+        const extra = await db.ticketExtra.findFirst({
+          where: { id: item.extraId, organizationId: tenant.organizationId, isActive: true },
+        });
+        if (!extra) continue;
+
+        const quantity = Math.max(1, Math.min(item.quantity || 1, extra.maxPerTicket));
+        const unitPrice = extra.basePrice;
+        const subtotal = Math.round(unitPrice * quantity * 100) / 100;
+        extrasTotal += subtotal;
+
+        ticketItemsData.push({
+          extraId: extra.id,
+          quantity,
+          unitPrice,
+          details: item.details || '',
+        });
+      }
+    }
+
+    const subtotal = Math.round((modifiedPrice + extrasTotal) * 100) / 100;
+
+    // Apply promo code
+    let discountAmount = 0;
+    let usedPromoCodeId: string | null = null;
+
+    if (promoCodeInput && promoCodeInput.trim()) {
+      const promo = await db.promoCode.findUnique({
+        where: { organizationId_code: { organizationId: tenant.organizationId, code: promoCodeInput.trim().toUpperCase() } },
+      });
+
+      if (promo && promo.isActive) {
+        const now = new Date();
+        const validDateRange = (!promo.validFrom || promo.validFrom <= now) && (!promo.validUntil || promo.validUntil >= now);
+        const validUsage = !promo.maxUses || promo.usedCount < promo.maxUses;
+
+        if (validDateRange && validUsage) {
+          if (promo.type === 'percent') {
+            discountAmount = Math.round(subtotal * (promo.value / 100) * 100) / 100;
+          } else {
+            discountAmount = Math.min(promo.value, subtotal);
+          }
+          usedPromoCodeId = promo.id;
+
+          // Increment promo usage counter
+          await db.promoCode.update({
+            where: { id: promo.id },
+            data: { usedCount: { increment: 1 } },
+          });
+        }
+      }
+    }
+
+    const total = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+
+    // Determine ticket type label
+    const finalTicketType = ticketType || fareTypeName || 'Standard';
+
+    // ── Create ticket ──────────────────────────────────────────
     const ticket = await db.ticket.create({
       data: {
         eventId,
         userId: tenant.userId,
         ticketCode,
-        ticketType: ticketType || 'Standard',
+        ticketType: finalTicketType,
         holderName,
         holderEmail,
         holderPhone,
         seatNumber,
-        price: parseFloat(price) || event.price,
+        price: total,
         currency: currency || event.currency,
         status: 'active',
         expiresAt: event.endDate,
+        fareTypeId: fareTypeId || null,
+        promoCodeId: usedPromoCodeId,
+        basePrice,
+        extrasTotal,
+        discountAmount,
+        ticketItems: {
+          create: ticketItemsData,
+        },
       },
       include: {
         event: { select: { id: true, name: true, type: true, startDate: true, endDate: true, location: true } },
         user: { select: { id: true, name: true, email: true } },
+        fareType: { select: { id: true, name: true, slug: true, emoji: true, priceModifier: true } },
+        promoCode: { select: { id: true, code: true, type: true, value: true } },
+        ticketItems: {
+          include: { extra: { select: { id: true, name: true, slug: true, emoji: true } } },
+        },
       },
     });
 
@@ -109,18 +218,18 @@ export async function POST(request: NextRequest) {
       data: { soldTickets: { increment: 1 } },
     });
 
-    // Create transaction record with organizationId
+    // Create transaction record
     const transaction = await db.transaction.create({
       data: {
         eventId,
         ticketId: ticket.id,
         userId: tenant.userId,
         organizationId: tenant.organizationId,
-        amount: ticket.price,
+        amount: total,
         currency: ticket.currency,
         status: 'completed',
         paymentMethod: 'cash',
-        description: `Ticket: ${ticket.ticketType} - ${ticketCode}`,
+        description: `Ticket: ${finalTicketType} - ${ticketCode}${fareTypeId ? ` (${fareTypeName})` : ''}${discountAmount > 0 ? ` [-${discountAmount}]` : ''}`,
       },
     });
 
@@ -129,7 +238,7 @@ export async function POST(request: NextRequest) {
         userId: tenant.userId,
         organizationId: tenant.organizationId,
         action: 'ticket.create',
-        details: `Created ticket ${ticketCode} for ${event.name}`,
+        details: `Created ticket ${ticketCode} for ${event.name} (${finalTicketType}, ${total} ${ticket.currency})`,
       },
     });
 
@@ -141,6 +250,14 @@ export async function POST(request: NextRequest) {
       ticket,
       transaction,
       qrData,
+      pricing: {
+        basePrice,
+        fareModifier,
+        modifiedPrice,
+        extrasTotal,
+        discountAmount,
+        total,
+      },
     }, 201);
   });
 }

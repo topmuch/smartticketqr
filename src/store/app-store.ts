@@ -23,7 +23,8 @@ export type PageName =
   | 'support'
   | 'affiliates'
   | 'fraud-alerts'
-  | 'display';
+  | 'display'
+  | 'ticketing-config';
 
 interface AppState {
   currentPage: PageName;

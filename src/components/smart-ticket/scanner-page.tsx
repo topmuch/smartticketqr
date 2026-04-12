@@ -26,6 +26,10 @@ import {
   MapPin,
   RefreshCw,
   ShieldAlert,
+  ArrowLeftRight,
+  Tag,
+  Percent,
+  Gift,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,6 +69,34 @@ interface ValidateResponse {
     price?: number;
     currency?: string;
     validatedAt?: string;
+    basePrice?: number;
+    extrasTotal?: number;
+    discountAmount?: number;
+    fareType?: {
+      id: string;
+      name: string;
+      slug: string;
+      emoji: string;
+      priceModifier: number;
+    } | null;
+    promoCode?: {
+      id: string;
+      code: string;
+      type: string;
+      value: number;
+    } | null;
+    isRoundTrip?: boolean;
+    scanCount?: number;
+    roundTripRemaining?: number;
+    extras?: Array<{
+      name: string;
+      slug: string;
+      emoji: string;
+      quantity: number;
+      unitPrice: number;
+      subtotal: number;
+      details: string;
+    }>;
     event: {
       id?: string;
       name: string;
@@ -1015,17 +1047,213 @@ export default function ScannerPage() {
                           </div>
                         )}
 
-                        {/* Price Display */}
-                        {scanResult.ticket.price != null && scanResult.ticket.currency && (
-                          <Separator />
+                        {/* Fare Type Badge & Round-Trip Indicator */}
+                        {(scanResult.ticket.fareType || scanResult.ticket.isRoundTrip) && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {scanResult.ticket.fareType && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 text-xs border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
+                              >
+                                <span>{scanResult.ticket.fareType.emoji}</span>
+                                <span>{scanResult.ticket.fareType.name}</span>
+                                <Percent className="h-3 w-3" />
+                                <span className="font-semibold">
+                                  {scanResult.ticket.fareType.priceModifier > 0 ? '+' : ''}
+                                  {Math.round(scanResult.ticket.fareType.priceModifier * 100)}%
+                                </span>
+                              </Badge>
+                            )}
+                            {scanResult.ticket.isRoundTrip && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 text-xs border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/30"
+                              >
+                                <ArrowLeftRight className="h-3 w-3" />
+                                Aller-Retour
+                              </Badge>
+                            )}
+                            {scanResult.ticket.promoCode && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 text-xs border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/30"
+                              >
+                                <Gift className="h-3 w-3" />
+                                {scanResult.ticket.promoCode.code}
+                                {scanResult.ticket.promoCode.type === 'percentage'
+                                  ? ` -${scanResult.ticket.promoCode.value}%`
+                                  : ` -${scanResult.ticket.promoCode.value.toLocaleString()}`}
+                              </Badge>
+                            )}
+                          </div>
                         )}
 
-                        {scanResult.ticket.price != null && scanResult.ticket.currency && (
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground">Price</p>
-                            <p className="text-sm font-semibold">
-                              {scanResult.ticket.price.toLocaleString()} {scanResult.ticket.currency}
+                        {/* Round-Trip Progress Indicator */}
+                        {scanResult.ticket.isRoundTrip &&
+                          scanResult.ticket.scanCount != null &&
+                          scanResult.ticket.roundTripRemaining != null && (
+                            <div className="rounded-md border border-sky-200 bg-sky-50 p-2.5 dark:border-sky-800 dark:bg-sky-950/30">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <ArrowLeftRight className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                                <p className="text-xs font-medium text-sky-800 dark:text-sky-300">
+                                  Trajet Aller-Retour
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs">
+                                <span
+                                  className={`flex items-center gap-1 ${
+                                    scanResult.ticket.scanCount >= 1
+                                      ? 'text-emerald-600 dark:text-emerald-400'
+                                      : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  {scanResult.ticket.scanCount >= 1 ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/40" />
+                                  )}
+                                  Aller
+                                </span>
+                                <div className="flex-1 h-px bg-sky-200 dark:bg-sky-800" />
+                                <span
+                                  className={`flex items-center gap-1 ${
+                                    scanResult.ticket.scanCount >= 2
+                                      ? 'text-emerald-600 dark:text-emerald-400'
+                                      : scanResult.ticket.roundTripRemaining === 1
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  {scanResult.ticket.scanCount >= 2 ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <div className="h-3.5 w-3.5 rounded-full border-2 border-current" />
+                                  )}
+                                  Retour
+                                </span>
+                              </div>
+                              <p className="text-xs text-sky-600 dark:text-sky-400 mt-1.5">
+                                Validation {Math.min(scanResult.ticket.scanCount, 2)}/2
+                                {scanResult.ticket.roundTripRemaining > 0 &&
+                                  ` · ${scanResult.ticket.roundTripRemaining} trajet(s) restant(s)`}
+                              </p>
+                            </div>
+                          )}
+
+                        {/* Price Display — Simple (no extras/fare/promo) */}
+                        {scanResult.ticket.price != null &&
+                          scanResult.ticket.currency &&
+                          !scanResult.ticket.fareType &&
+                          !scanResult.ticket.extras?.length &&
+                          !scanResult.ticket.promoCode && (
+                            <>
+                              <Separator />
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">Price</p>
+                                <p className="text-sm font-semibold">
+                                  {scanResult.ticket.price.toLocaleString()} {scanResult.ticket.currency}
+                                </p>
+                              </div>
+                            </>
+                          )}
+
+                        {/* Price Breakdown — Enhanced */}
+                        {scanResult.ticket.price != null &&
+                          scanResult.ticket.currency &&
+                          (scanResult.ticket.fareType ||
+                            scanResult.ticket.extras?.length ||
+                            scanResult.ticket.promoCode) && (
+                            <>
+                              <Separator />
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                  <Tag className="h-3 w-3" /> Price Breakdown
+                                </p>
+                                <div className="rounded-md bg-muted/40 p-2.5 space-y-1 text-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">Base price</span>
+                                    <span className="font-mono">
+                                      {(scanResult.ticket.basePrice ?? scanResult.ticket.price).toLocaleString()}{' '}
+                                      {scanResult.ticket.currency}
+                                    </span>
+                                  </div>
+                                  {scanResult.ticket.fareType && scanResult.ticket.basePrice != null && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground">
+                                        {scanResult.ticket.fareType.emoji} {scanResult.ticket.fareType.name}
+                                      </span>
+                                      <span
+                                        className={`font-mono ${
+                                          scanResult.ticket.fareType.priceModifier < 0
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : scanResult.ticket.fareType.priceModifier > 0
+                                              ? 'text-red-600 dark:text-red-400'
+                                              : ''
+                                        }`}
+                                      >
+                                        {scanResult.ticket.fareType.priceModifier > 0 ? '+' : ''}
+                                        {Math.round(scanResult.ticket.fareType.priceModifier * 100)}%
+                                      </span>
+                                    </div>
+                                  )}
+                                  {(scanResult.ticket.extrasTotal ?? 0) > 0 && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground">Extras</span>
+                                      <span className="font-mono">
+                                        +{(scanResult.ticket.extrasTotal ?? 0).toLocaleString()}{' '}
+                                        {scanResult.ticket.currency}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {scanResult.ticket.promoCode && (scanResult.ticket.discountAmount ?? 0) > 0 && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground">
+                                        <Gift className="h-3 w-3 inline mr-0.5" />
+                                        Promo {scanResult.ticket.promoCode.code}
+                                      </span>
+                                      <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                                        −{(scanResult.ticket.discountAmount ?? 0).toLocaleString()}{' '}
+                                        {scanResult.ticket.currency}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <Separator className="my-1" />
+                                  <div className="flex items-center justify-between font-semibold">
+                                    <span>Total</span>
+                                    <span className="font-mono">
+                                      {scanResult.ticket.price.toLocaleString()} {scanResult.ticket.currency}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                        {/* Extras List */}
+                        {scanResult.ticket.extras && scanResult.ticket.extras.length > 0 && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                              <Tag className="h-3 w-3" /> Extras ({scanResult.ticket.extras.length})
                             </p>
+                            <div className="rounded-md border bg-muted/20 divide-y divide-border/60 overflow-hidden">
+                              {scanResult.ticket.extras.map((extra, i) => (
+                                <div key={extra.slug || i} className="flex items-center gap-2 px-2.5 py-2">
+                                  <span className="text-base shrink-0">{extra.emoji}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">{extra.name}</p>
+                                    {extra.details && (
+                                      <p className="text-xs text-muted-foreground truncate">{extra.details}</p>
+                                    )}
+                                  </div>
+                                  {extra.quantity > 1 && (
+                                    <span className="text-xs text-muted-foreground shrink-0">×{extra.quantity}</span>
+                                  )}
+                                  <span className="text-xs font-mono font-medium shrink-0">
+                                    {extra.subtotal.toLocaleString()} {scanResult.ticket.currency}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
