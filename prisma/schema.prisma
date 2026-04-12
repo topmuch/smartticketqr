@@ -105,9 +105,109 @@ model Organization {
   affiliates        Affiliate[]
   fraudAlerts       FraudAlert[]
   transportLines    TransportLine[]
+  fareTypes         FareType[]
+  ticketExtras      TicketExtra[]
+  promoCodes        PromoCode[]
 
   @@index([slug])
   @@index([subscriptionStatus])
+  @@index([isActive])
+}
+
+// ============================================================
+// 🏷️ FARE TYPES (Social pricing tiers: child, student, senior, etc.)
+// ============================================================
+model FareType {
+  id              String   @id @default(cuid())
+  organizationId  String
+  slug            String                               // 'standard', 'child', 'student', 'senior', 'group', 'round_trip'
+  name            String                               // "Enfant", "Étudiant", "Senior"
+  emoji           String   @default("🎫")
+  priceModifier   Float    @default(1.00)                 // 0.50 = -50%, 2.00 = x2 (aller-retour)
+  requiresProof   Boolean  @default(false)                // Carte étudiant, pièce identité
+  proofLabel      String   @default("")                    // "Carte étudiant", "PIèce identité"
+  ageMin          Int?                                     // Enfant: 0-12, Senior: 60+
+  ageMax          Int?
+  maxPerBooking   Int      @default(10)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([isActive])
+}
+
+// ============================================================
+// 🧳 TICKET EXTRAS (Bagage, Vélo, Animal, Voiture)
+// ============================================================
+model TicketExtra {
+  id              String   @id @default(cuid())
+  organizationId  String
+  slug            String                               // 'bagage_sup', 'velo', 'animal', 'voiture'
+  name            String                               // "Bagage supplémentaire", "Vélo/Moto"
+  emoji           String   @default("📦")
+  pricingType      String   @default("fixed")                // fixed, per_unit, per_kg
+  basePrice       Float                                   // Prix unitaire en FCFA
+  requiresDetails  Boolean  @default(false)                // ex: plaque immatriculation
+  detailLabel      String   @default("")                    // "Plaque d'immatriculation", "Poids en kg"
+  maxPerTicket    Int      @default(5)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ticketItems    TicketItem[]
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([isActive])
+}
+
+// ============================================================
+// 🔗 TICKET ITEMS (Junction: Ticket ↔ Extras)
+// ============================================================
+model TicketItem {
+  id              String   @id @default(cuid())
+  ticketId        String
+  extraId         String
+  quantity        Int      @default(1)
+  unitPrice       Float
+  details         String   @default("")                    // JSON: {"plate":"DK-1234-AB", "weight_kg":15}
+  createdAt       DateTime @default(now())
+
+  ticket          Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  extra           TicketExtra @relation(fields: [extraId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([extraId])
+}
+
+// ============================================================
+// 🏷️ PROMO CODES (Discount codes)
+// ============================================================
+model PromoCode {
+  id              String   @id @default(cuid())
+  organizationId  String
+  code            String                               // "NOEL2026", "GROUPE10"
+  type            String   @default("percent")              // percent, fixed
+  value           Float                                   // 10 = 10%, 500 = 500 FCFA
+  minTickets      Int      @default(1)
+  validFrom       DateTime?
+  validUntil      DateTime?
+  maxUses         Int?
+  usedCount        Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
   @@index([isActive])
 }
 
@@ -204,8 +304,17 @@ model Ticket {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  fareTypeId    String?                                  // Fare type (student, child, senior, etc.)
+  promoCodeId   String?                                  // Applied promo code
+  basePrice     Float                                   // Original price before modifiers
+  extrasTotal   Float    @default(0)                     // Sum of extras
+  discountAmount Float    @default(0)                     // Promo discount
+
   event        Event         @relation(fields: [eventId], references: [id])
   user         User?         @relation(fields: [userId], references: [id])
+  fareType     FareType?     @relation(fields: [fareTypeId], references: [id])
+  promoCode    PromoCode?    @relation(fields: [promoCodeId], references: [id])
+  ticketItems  TicketItem[]
   scans        Scan[]
   transactions Transaction[]
 
@@ -213,6 +322,8 @@ model Ticket {
   @@index([ticketCode])
   @@index([status])
   @@index([holderEmail])
+  @@index([fareTypeId])
+  @@index([promoCodeId])
 }
 
 // ============================================================
