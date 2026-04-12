@@ -73,6 +73,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return corsResponse({ error: 'Not authorized to update this organization' }, 403);
     }
 
+    // Only super_admin and admin can update org settings
+    if (!['super_admin', 'admin'].includes(tenant.role)) {
+      return corsResponse({ error: 'Only admins can update organization settings' }, 403);
+    }
+
     const existing = await db.organization.findUnique({ where: { id } });
     if (!existing) {
       return corsResponse({ error: 'Organization not found' }, 404);
@@ -80,6 +85,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const body = await request.json();
     const { name, email, phone, primaryColor, subscriptionPlan, subscriptionStatus, settings } = body;
+
+    // If changing plan, only super_admin can modify subscription fields
+    if ((subscriptionPlan || subscriptionStatus) && tenant.role !== 'super_admin') {
+      return corsResponse({ error: 'Only super admin can change subscription plan or status' }, 403);
+    }
 
     // If changing plan, update limits
     let maxEvents = existing.maxEvents;

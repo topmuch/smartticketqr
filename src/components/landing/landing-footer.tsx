@@ -19,9 +19,9 @@ const footerSections = [
     title: 'Entreprise',
     links: [
       { label: '\u00c0 Propos', page: 'about' as LandingPage },
-      { label: 'Carri\u00e8res', page: 'about' as LandingPage },
-      { label: 'Blog', page: 'about' as LandingPage },
-      { label: 'Partenaires', page: 'about' as LandingPage },
+      { label: 'Carri\u00e8res', page: 'contact' as LandingPage, badge: 'Bient\u00f4t' },
+      { label: 'Blog', page: 'contact' as LandingPage, badge: 'Bient\u00f4t' },
+      { label: 'Partenaires', page: 'contact' as LandingPage, badge: 'Bient\u00f4t' },
     ],
   },
   {
@@ -35,9 +35,9 @@ const footerSections = [
 ];
 
 const socialLinks = [
-  { name: 'LinkedIn', icon: Linkedin },
-  { name: 'Twitter', icon: Twitter },
-  { name: 'Facebook', icon: Facebook },
+  { name: 'LinkedIn', icon: Linkedin, href: 'https://linkedin.com/company/smartticketqr' },
+  { name: 'Twitter', icon: Twitter, href: 'https://twitter.com/smartticketqr' },
+  { name: 'Facebook', icon: Facebook, href: 'https://facebook.com/smartticketqr' },
 ];
 
 export default function LandingFooter() {
@@ -93,9 +93,12 @@ export default function LandingFooter() {
                   <li key={link.label}>
                     <button
                       onClick={() => handleNav(link.page)}
-                      className="text-sm text-gray-400 hover:text-white transition-colors"
+                      className="text-sm text-gray-400 hover:text-white transition-colors inline-flex items-center gap-1.5"
                     >
                       {link.label}
+                      {'badge' in link && link.badge && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#007BFF]/20 text-[#007BFF]">{link.badge}</span>
+                      )}
                     </button>
                   </li>
                 ))}
@@ -154,13 +157,16 @@ export default function LandingFooter() {
               {socialLinks.map((social) => {
                 const Icon = social.icon;
                 return (
-                  <button
+                  <a
                     key={social.name}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="w-9 h-9 rounded-lg bg-white/5 hover:bg-[#007BFF] flex items-center justify-center transition-all duration-200 hover:scale-110"
                     aria-label={social.name}
                   >
                     <Icon className="w-4 h-4 text-gray-400 hover:text-white" />
-                  </button>
+                  </a>
                 );
               })}
             </div>

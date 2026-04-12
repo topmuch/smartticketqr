@@ -105,10 +105,43 @@ function errorResponse(message: string, status: number): NextResponse {
 }
 
 // ============================================================
-// CORS HEADERS (updated with X-Organization-Id)
+// CORS HEADERS (restricted origins)
+// ============================================================
+// In production, only allow the configured domain.
+// In development, allow all origins for local testing.
 // ============================================================
 
-export const corsHeaders = {
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : []; // Empty = use default per-env behavior
+
+/** Get the allowed origin for the current request */
+function getAllowedOrigin(requestOrigin: string | null): string {
+  // Production: strict origin checking
+  if (process.env.NODE_ENV === 'production') {
+    if (ALLOWED_ORIGINS.length > 0 && requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+      return requestOrigin;
+    }
+    // If CORS_ORIGINS is not configured, allow the first ALLOWED_ORIGINS or fall back to request origin
+    return ALLOWED_ORIGINS[0] || requestOrigin || '';
+  }
+
+  // Development: allow all origins
+  return '*';
+}
+
+export function getCorsHeaders(origin: string | null = null): Record<string, string> {
+  const allowed = getAllowedOrigin(origin);
+  return {
+    ...(allowed !== '*' && { 'Access-Control-Allow-Origin': allowed }),
+    ...(allowed === '*' && { 'Access-Control-Allow-Origin': '*' }),
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
+    ...(allowed !== '*' && { 'Vary': 'Origin' }),
+  };
+}
+
+export const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
@@ -118,7 +151,11 @@ export function corsResponse(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: corsHeaders });
 }
 
-export function handleCors() {
+export function handleCors(request?: NextRequest) {
+  if (request) {
+    const origin = request.headers.get('origin');
+    return new NextResponse(null, { status: 204, headers: getCorsHeaders(origin) });
+  }
   return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
 

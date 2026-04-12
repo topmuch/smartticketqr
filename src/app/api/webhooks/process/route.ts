@@ -33,17 +33,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // If no valid process secret, this can still work if called
-    // without auth — the queue processor is org-agnostic and just
-    // picks up pending entries from all orgs.
-    // For additional security, you can require auth below.
-
-    // If WEBHOOK_PROCESS_SECRET is configured, reject calls without it
-    if (PROCESS_SECRET && processSecret !== PROCESS_SECRET) {
-      return corsResponse({ error: 'Invalid process secret' }, 401);
+    // Fail-closed: if WEBHOOK_PROCESS_SECRET is set, reject any call without valid secret
+    if (PROCESS_SECRET) {
+      return corsResponse({ error: 'Valid process secret required' }, 401);
     }
 
-    // No process secret configured — allow open access (for dev environments)
+    // No process secret configured — only allow in non-production environments
+    if (process.env.NODE_ENV === 'production') {
+      return corsResponse({ error: 'WEBHOOK_PROCESS_SECRET must be configured in production' }, 403);
+    }
+
+    // Dev environment without secret: allow open access for testing
     const result = await processWebhookQueue();
     return corsResponse({
       success: true,

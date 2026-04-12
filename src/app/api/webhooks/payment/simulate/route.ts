@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
+import { resolveTenant, isErrorResponse, requireTenantRole, corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
 import { activateSubscription } from '@/lib/subscription-manager';
 
 /**
@@ -13,8 +13,14 @@ import { activateSubscription } from '@/lib/subscription-manager';
  */
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    const tenant = resolveTenant(request);
+    // ⚠️ Only admin and super_admin can simulate payments
+    const tenant = requireTenantRole(request, 'admin', 'super_admin');
     if (isErrorResponse(tenant)) return tenant;
+
+    // Block in production — simulation endpoints must never be exposed
+    if (process.env.NODE_ENV === 'production') {
+      return corsResponse({ error: 'Payment simulation is disabled in production' }, 403);
+    }
 
     const body = await request.json();
     const { externalRef, planCode } = body;

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import {
   resolveTenant,
   isErrorResponse,
+  requireTenantRole,
   corsResponse,
   withErrorHandler,
   handleCors,
@@ -83,7 +84,8 @@ export async function GET(request: NextRequest) {
 // ============================================================
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    const tenant = resolveTenant(request);
+    // Only admin, super_admin, and operator can create fraud alerts
+    const tenant = requireTenantRole(request, 'admin', 'super_admin', 'operator');
     if (isErrorResponse(tenant)) return tenant;
 
     const body = await request.json();

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { QrCode, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { QrCode, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
 import { useLandingStore } from '@/store/landing-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useAppStore } from '@/store/app-store';
@@ -20,6 +20,11 @@ export default function LandingLoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
 
   const handleNav = (page: 'register' | 'home') => {
     setCurrentLandingPage(page);
@@ -138,7 +143,11 @@ export default function LandingLoginPage() {
                   <input type="checkbox" className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-[#007BFF] focus:ring-[#007BFF]" />
                   <span className="text-sm text-gray-600 dark:text-gray-400">Se souvenir de moi</span>
                 </label>
-                <button type="button" className="text-sm text-[#007BFF] hover:underline font-medium">
+                <button
+                  type="button"
+                  onClick={() => { setShowForgotPassword(true); setResetEmail(email); }}
+                  className="text-sm text-[#007BFF] hover:underline font-medium"
+                >
                   Mot de passe oubli&eacute;&thinsp;?
                 </button>
               </div>
@@ -173,6 +182,111 @@ export default function LandingLoginPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Forgot Password Dialog */}
+        {showForgotPassword && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/50 backdrop-blur-sm">
+            <Card className="w-full max-w-md border-gray-200 dark:border-gray-800 shadow-xl bg-white dark:bg-gray-900">
+              <CardContent className="p-6">
+                <button
+                  onClick={() => { setShowForgotPassword(false); setResetSuccess(false); setResetError(''); }}
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Retour &agrave; la connexion
+                </button>
+
+                <div className="text-center mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-[#007BFF]/10 flex items-center justify-center mx-auto mb-3">
+                    <QrCode className="w-6 h-6 text-[#007BFF]" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Mot de passe oubli&eacute;</h2>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    Entrez votre email pour recevoir un lien de r&eacute;initialisation
+                  </p>
+                </div>
+
+                {resetSuccess ? (
+                  <div className="text-center p-4 rounded-xl bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                    <p className="text-green-700 dark:text-green-400 text-sm">
+                      Si un compte existe avec cette adresse, vous recevrez un lien de r&eacute;initialisation sous quelques minutes.
+                    </p>
+                    <Button
+                      onClick={() => { setShowForgotPassword(false); setResetSuccess(false); }}
+                      className="mt-4 bg-[#007BFF] hover:bg-[#0056b3] text-white rounded-xl"
+                    >
+                      Retour &agrave; la connexion
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    {resetError && (
+                      <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm text-center">
+                        {resetError}
+                      </div>
+                    )}
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        setResetError('');
+                        setResetLoading(true);
+                        try {
+                          const res = await fetch('/api/auth/forgot-password', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: resetEmail }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            setResetError(data.error || 'Erreur');
+                            return;
+                          }
+                          setResetSuccess(true);
+                        } catch {
+                          setResetError('Erreur r&eacute;seau. Veuillez r&eacute;essayer.');
+                        } finally {
+                          setResetLoading(false);
+                        }
+                      }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <Label htmlFor="reset-email" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+                          Email
+                        </Label>
+                        <Input
+                          id="reset-email"
+                          type="email"
+                          placeholder="votre@email.com"
+                          value={resetEmail}
+                          onChange={(e) => setResetEmail(e.target.value)}
+                          className="rounded-xl bg-white dark:bg-gray-800"
+                          required
+                          disabled={resetLoading}
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        size="lg"
+                        className="w-full bg-[#007BFF] hover:bg-[#0056b3] text-white font-semibold rounded-xl"
+                        disabled={resetLoading}
+                      >
+                        {resetLoading ? (
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Envoi en cours...
+                          </span>
+                        ) : (
+                          'Envoyer le lien'
+                        )}
+                      </Button>
+                    </form>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { corsResponse, withErrorHandler, handleCors } from '@/lib/api-helper';
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limiter';
 import QRCode from 'qrcode';
 
 /**
@@ -9,9 +10,23 @@ import QRCode from 'qrcode';
  * Public endpoint (no auth required) for viewing ticket details.
  * Used by the WhatsApp shared ticket link.
  * Returns ticket holder info, event details, and QR code image.
+ *
+ * Rate limited: 30 requests per minute per IP to prevent PII enumeration.
  */
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
+    // Rate limiting: 30/min per IP
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown';
+    const rateKey = `ticket-public:ip:${clientIp}`;
+    const rate = checkRateLimit(rateKey, 30, 60 * 1000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: getRateLimitHeaders(rate) }
+      );
+    }
     const { searchParams } = new URL(request.url);
     const ticketCode = searchParams.get('code')?.trim().toUpperCase();
     const orgSlug = searchParams.get('org');

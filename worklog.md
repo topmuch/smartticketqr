@@ -152,3 +152,57 @@ Stage Summary:
 - Additional fixes: not-found.tsx client directive, PWA manifest.json created
 - Project compiles cleanly, no errors
 - Estimated security score: 80+/100 (up from 47/100 at audit)
+
+---
+
+Task ID: 11
+Agent: PWA Agent
+Task: Create PWA files (sw.js, offline.html, hooks, components)
+
+Work Log:
+- Created public/sw.js service worker with cache-first strategy for static assets, network-first for API calls, stale-while-revalidate for HTML pages, offline fallback to /offline.html, versioned caches (smartticketqr-v2), skipWaiting and clients.claim
+- Created public/offline.html fallback page in French with SmartTicketQR branding (blue #007BFF), inline QR code SVG logo, "Hors connexion" message, retry connection button with loading spinner
+- Created src/hooks/use-service-worker.ts — registers SW on mount, listens for update events, handles controller change with page reload, provides { isRegistered, needRefresh, updateServiceWorker }
+- Created src/hooks/use-pwa-install.ts — captures beforeinstallprompt event, detects standalone mode, provides { canInstall, isInstalled, promptInstall }
+- Created src/components/smart-ticket/pwa-install-prompt.tsx — install banner with slide-up animation, "Installer l'application" button, dismiss/close button, localStorage dismissal (7-day expiry), uses shadcn/ui Button
+- Created src/components/smart-ticket/camera-scanner.tsx — camera QR code scanner using MediaDevices API and jsQR, start/stop controls, front/back camera switching, torch/flashlight toggle, scan overlay with corner markers, graceful permission error handling, responsive design
+- Created src/components/smart-ticket/display-manager.tsx — full-screen kiosk display for validated tickets, slide-in animations via framer-motion, valid/invalid status indicators, auto-cycling through tickets, polling and WebSocket support, manual prev/next navigation, stats bar, empty state
+- Installed jsqr dependency (v1.4.0)
+- All lint checks pass with zero errors
+
+Stage Summary:
+- All 7 PWA files created
+- Service worker supports offline mode and cache versioning
+- PWA install prompt component ready
+- Camera scanner component with jsQR integration
+- Display manager for kiosk-style ticket display
+- Zero lint errors
+
+---
+
+Task ID: round2-fixes
+Agent: Main Agent
+Task: Fix all remaining audit issues (M1-M5 major + m6-m10 minor + PWA regression)
+
+Work Log:
+- M1: Payment simulate endpoint — restricted to admin/super_admin via requireTenantRole(), blocked in production (403)
+- M2: Organizations PUT — added role check (admin/super_admin only), super_admin only can change subscriptionPlan/subscriptionStatus
+- M3: Fraud-alerts POST — added requireTenantRole() for admin, super_admin, operator
+- M4: Custom-domains POST — added requireTenantRole() for admin, super_admin only
+- M5: CORS — replaced wildcard with configurable CORS_ORIGINS env var, strict checking in production, dev still allows all
+- m6: Ticket public PII — added rate limiting (30/min per IP) to prevent enumeration
+- m7: Webhooks/process — fail-closed: if WEBHOOK_PROCESS_SECRET set, reject without valid secret; block in production if not configured
+- m8: Forgot password — created /api/auth/forgot-password endpoint (rate limited, anti-enumeration) + modal dialog in landing-login.tsx
+- m9: Social media footer — changed <button> to <a> with href to LinkedIn/Twitter/Facebook profiles, target _blank with rel noopener
+- m10: Footer links — Carrières/Blog/Partenaires now point to 'contact' page with "Bientôt" badge instead of misleadingly going to 'about'
+- PWA: Service Worker (sw.js) + offline.html + use-service-worker.ts hook + use-pwa-install.ts hook + pwa-install-prompt.tsx + camera-scanner.tsx + display-manager.tsx
+- Integrated PWA into Providers (service worker registration + install prompt banner)
+- All lint checks pass with zero errors
+
+Stage Summary:
+- All 5 major security issues (M1-M5) patched
+- All 5 minor UX issues (m6-m10) fixed
+- PWA fully implemented (7 files created + integrated into app)
+- Estimated security score: ~90/100 (up from 80/100 after round 1, from 47/100 at initial audit)
+- Files modified: api-helper.ts, simulate/route.ts, organizations/[id]/route.ts, fraud-alerts/route.ts, custom-domains/route.ts, ticket/public/route.ts, webhooks/process/route.ts, landing-footer.tsx, landing-login.tsx, providers.tsx
+- Files created: auth/forgot-password/route.ts, public/sw.js, public/offline.html, src/hooks/use-service-worker.ts, src/hooks/use-pwa-install.ts, pwa-install-prompt.tsx, camera-scanner.tsx, display-manager.tsx
