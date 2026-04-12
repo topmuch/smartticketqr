@@ -26,6 +26,7 @@ import CustomDomainsPage from '@/components/smart-ticket/custom-domains-page';
 import AutomationPage from '@/components/smart-ticket/automation-page';
 import SupportPage from '@/components/smart-ticket/support-page';
 import AffiliatesPage from '@/components/smart-ticket/affiliates-page';
+import DisplayPage from '@/components/smart-ticket/display-page';
 import LandingNavbar from '@/components/landing/landing-navbar';
 import LandingFooter from '@/components/landing/landing-footer';
 import LandingHomePage from '@/components/landing/home-page';
@@ -59,6 +60,7 @@ const pageComponents: Record<PageName, React.ComponentType> = {
   automation: AutomationPage,
   support: SupportPage,
   affiliates: AffiliatesPage,
+  display: DisplayPage,
 };
 
 const landingComponents: Record<LandingPage, React.ComponentType> = {

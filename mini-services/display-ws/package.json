@@ -1,0 +1,12 @@
+{
+  "name": "smartticketqr-display-ws",
+  "version": "1.0.0",
+  "description": "Service WebSocket pour la diffusion en temps réel des scans de validation aux écrans d'affichage SmartTicketQR",
+  "scripts": {
+    "dev": "bun --hot index.ts",
+    "start": "bun index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1"
+  }
+}

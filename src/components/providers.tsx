@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { I18nProvider } from '@/lib/i18n';
 import { useServiceWorker } from '@/hooks/use-service-worker';
-import PwaInstallPrompt from '@/components/smart-ticket/pwa-install-prompt';
+import { PwaInstallPrompt } from '@/components/smart-ticket/pwa-install-prompt';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(

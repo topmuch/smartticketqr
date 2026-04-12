@@ -206,3 +206,107 @@ Stage Summary:
 - Estimated security score: ~90/100 (up from 80/100 after round 1, from 47/100 at initial audit)
 - Files modified: api-helper.ts, simulate/route.ts, organizations/[id]/route.ts, fraud-alerts/route.ts, custom-domains/route.ts, ticket/public/route.ts, webhooks/process/route.ts, landing-footer.tsx, landing-login.tsx, providers.tsx
 - Files created: auth/forgot-password/route.ts, public/sw.js, public/offline.html, src/hooks/use-service-worker.ts, src/hooks/use-pwa-install.ts, pwa-install-prompt.tsx, camera-scanner.tsx, display-manager.tsx
+
+---
+
+Task ID: 4-6
+Agent: Display Frontend Agent
+Task: Create Dynamic Display frontend components
+
+Work Log:
+- Created display-templates.tsx — 5 template render functions (kiosk, compact, full, queue, transport)
+  - KioskTemplate: Full dark theme, large cycling ticket card, stats bar, organization branding, live clock
+  - CompactTemplate: Light theme, scrolling validation feed, minimal 2-line entries, scan count
+  - FullTemplate: Dark theme, event banner with capacity bar, live feed + stats panel with SVG donut chart
+  - QueueTemplate: Counter-style, waiting count display, current scanning ticket, wait time estimate, service rate
+  - TransportTemplate: Dark blue theme, departure board, capacity bar, boarding feed, countdown timer
+  - All templates use CSS animations (not framer-motion) for performance on low-power devices
+  - Includes LiveClock component and OrgBranding helper
+  - All text in French
+- Created display-kiosk.tsx — full-screen kiosk display component
+  - Fetches validated tickets from /api/display/validated on mount
+  - Fetches stats from /api/display/stats every 10 seconds via polling
+  - Fetches event details from /api/events/{id}
+  - WebSocket connection via io('/?XTransformPort=3004') with auto-reconnect
+  - Listens for 'validation' and 'validated-tickets' WebSocket events
+  - Auto-cycles through tickets for kiosk and transport templates
+  - Connection indicator overlay (En direct / Reconnexion...)
+  - Loading state with spinner
+  - Renders appropriate template based on config
+- Created display-page.tsx — admin dashboard page with 3 tabs
+  - Tab 1 (Écrans): Grid of display config cards with name, event, template icon, status/public badges, action buttons (Edit, Preview, Delete, Copy Link)
+  - Tab 2 (Aperçu en direct): Embedded DisplayKiosk with event selector, template selector, fullscreen toggle
+  - Tab 3 (Modèles): Grid of 5 template preview cards with colored thumbnails, descriptions, "Utiliser" buttons
+  - Create/Edit Dialog: Name, Event select, Template select, Cycle interval slider (3-30s), Color picker, Show Stats/Organization/Public switches
+  - Delete confirmation dialog
+  - Preview dialog with template switcher
+  - Data fetching with auth headers from useAuthStore()
+  - Framer Motion animations for admin UI
+  - All text in French, responsive design
+- Updated app-store.ts — added 'display' to PageName union type
+- Updated page.tsx — imported DisplayPage, added to pageComponents mapping
+- Updated app-shell.tsx — added 'display' nav item with Monitor icon, imported Monitor from lucide-react
+- Installed socket.io-client dependency (v4.8.3)
+- All lint checks pass with zero errors
+
+Stage Summary:
+- 3 new components created (display-templates.tsx, display-kiosk.tsx, display-page.tsx)
+- Admin page supports CRUD of display configs via API
+- Kiosk component supports real-time WebSocket updates + polling fallback
+- 5 display templates for different use cases (kiosk, compact, full, queue, transport)
+- All text in French, professional design matching real event/transport displays
+- CSS animations for kiosk templates (low-power device compatible), framer-motion for admin
+- Registered 'display' page in SPA routing (app-store + page.tsx + app-shell sidebar)
+
+---
+
+Task ID: 2-3
+Agent: Display Backend Agent
+Task: Create Dynamic Display API routes + WebSocket service
+
+Work Log:
+- Created GET /api/display/validated — recent validated tickets with event filtering, delta polling via `since` param, Scan→Ticket→Event joins, ordered by createdAt desc
+- Created GET /api/display/stats — display-friendly scan statistics with OrgStatsCache optimization, per-event and org-wide scoping
+- Created GET/POST /api/display/config — display configuration CRUD stored in Organization.settings JSON field, admin/super_admin only, 5 template types validated (kiosk|compact|full|queue|transport), max 20 configs per org
+- Created GET/PUT/DELETE /api/display/config/[id] — single config operations with partial update support, name uniqueness enforcement
+- Created GET /api/display/screens — public endpoint for kiosk displays (no auth required), rate limited 60/min per IP, returns config+organization+tickets+stats in one response, isPublic/isActive checks
+- Created mini-services/display-ws — Socket.IO WebSocket service on port 3004
+  - Custom HTTP request routing to coexist REST endpoints (POST /emit, POST /push-stats, GET /health) with Socket.IO path:'/' for Caddy forwarding
+  - Two room types: event:{eventId} and org:{orgId} for scoped broadcasting
+  - In-memory stats counters updated via /emit, broadcasted every 30s via display:stats event
+  - Client events: join (with initial stats), leave, disconnect tracking
+  - Server events: scan:validated, display:stats
+  - Health check endpoint for monitoring
+  - Graceful shutdown handling
+- All API routes use tenant isolation (resolveTenant/requireTenantRole from api-helper)
+- French comments throughout codebase
+
+Stage Summary:
+- 6 new API routes + 1 WebSocket mini-service created
+- Display configs stored in Organization.settings JSON (key: 'displayConfigs')
+- Public screen endpoint allows unauthenticated kiosk access with rate limiting
+- WebSocket service broadcasts scan events per event/org room with in-memory stats
+- All routes use tenant isolation (resolveTenant/requireTenantRole)
+- All lint checks pass with zero errors
+
+---
+
+Task ID: dynamic-display-integration
+Agent: Main Agent
+Task: Integrate Dynamic Display Module, fix PWA import, verify everything works
+
+Work Log:
+- Fixed PWA import in providers.tsx — changed from default import to named import `{ PwaInstallPrompt }`
+- Verified all 6 display API routes compile and respond
+- Verified WebSocket service running on port 3004
+- Verified 'display' page registered in app-store, page.tsx, and app-shell sidebar
+- Dev server compiles cleanly (GET / 200)
+- All lint checks pass with zero errors
+
+Stage Summary:
+- Dynamic Display Module fully operational
+- Complete stack: 6 API routes + WebSocket service + 3 frontend components + 5 templates
+- Admin can create/manage display configs, preview templates, copy public links
+- Kiosk displays connect via WebSocket for real-time validation updates
+- Public endpoint allows unauthenticated kiosk access (for TVs/monitors at event entrances)
+- Score progression: 47 → 80 → 90 → fully featured platform

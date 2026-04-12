@@ -31,6 +31,7 @@ import {
   Zap,
   Headphones,
   Handshake,
+  Monitor,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,7 @@ const navItems: NavItem[] = [
   { id: 'events', label: 'Events & Transport', icon: Calendar },
   { id: 'tickets', label: 'Tickets', icon: Ticket, badge: 'QR' },
   { id: 'scanner', label: 'QR Scanner', icon: ScanLine },
+  { id: 'display', label: 'Dynamic Display', icon: Monitor },
   { id: 'users', label: 'User Management', icon: Users, roles: ['super_admin', 'admin'] },
   { id: 'transactions', label: 'Transactions', icon: Receipt, roles: ['super_admin', 'admin'] },
   { id: 'activity-logs', label: 'Activity Logs', icon: Activity, roles: ['super_admin', 'admin'] },

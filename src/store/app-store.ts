@@ -22,7 +22,8 @@ export type PageName =
   | 'automation'
   | 'support'
   | 'affiliates'
-  | 'fraud-alerts';
+  | 'fraud-alerts'
+  | 'display';
 
 interface AppState {
   currentPage: PageName;
