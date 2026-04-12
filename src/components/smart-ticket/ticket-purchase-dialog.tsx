@@ -879,10 +879,10 @@ export default function TicketPurchaseDialog({
                   Appliquer
                 </Button>
               </div>
-              {promoError && (
+              {derivedPromoError && (
                 <div className="flex items-center gap-1.5 text-xs text-red-500">
                   <XCircle className="h-3.5 w-3.5" />
-                  {promoError}
+                  {derivedPromoError}
                 </div>
               )}
               {pricingData?.promo && promoApplied && (

@@ -278,3 +278,34 @@ Stage Summary:
 - All APIs updated and verified
 - All frontend components created and integrated
 - Database seeded with representative test data
+
+---
+Task ID: 4
+Agent: Main (continuation)
+Task: Session continuation - audit, bug fix, seed, verify
+
+Work Log:
+- Read full project state: schema, APIs, components, lib files, worklog
+- Dev server verified running: GET / 200 in 8.7s (compile + render)
+- ESLint: 0 errors, 0 warnings
+- Prisma db push: in sync
+- Found and fixed BUG: ticket-purchase-dialog.tsx line 882 — `promoError` referenced undefined variable
+  - Root cause: variable defined as `derivedPromoError` on line 340
+  - Fix: changed `promoError` → `derivedPromoError` on lines 882 and 885
+- Created comprehensive seed script (prisma/seed.ts)
+  - Organization: Transport Express Dakar
+  - 4 Users: Admin, Caisse, Contrôleur, Comptable (password: Demo@1234)
+  - 6 Fare Types: Standard, Enfant, Étudiant, Senior, Groupe, Aller-Retour
+  - 5 Ticket Extras: Bagage, Vélo, Animal, Voiture, Climatisation
+  - 3 Promo Codes: NOEL2025 (15%), GROUPE10 (1000 FCFA), ETUDIANT25 (25%)
+  - 3 Transport Lines with departure/arrival schedules
+  - 3 Active Events (Dakar→Thiès, Dakar→St-Louis, Ferry)
+  - 5 Sample Tickets covering all strategic decisions
+- Full self-audit against 4 strategic decisions (12/12 checkpoints passed)
+- Transparent: IndexedDB offline sync PWA service not yet built
+
+Stage Summary:
+- 1 bug found and fixed
+- Complete seed data created (covers all fare types, extras, promo codes, vehicle tickets)
+- All 4 strategic decisions verified in code
+- Build verified: ESLint clean, Prisma sync, page compiles 200
