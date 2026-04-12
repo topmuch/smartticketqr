@@ -85,6 +85,7 @@ import {
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
 import { cn } from '@/lib/utils';
+import RoleGate from '@/components/smart-ticket/role-gate';
 
 // ==================== Types ====================
 
@@ -698,6 +699,7 @@ export default function ApiKeysPage() {
   }
 
   return (
+    <RoleGate permission="api_keys.manage" redirectTo="dashboard">
     <TooltipProvider delayDuration={300}>
       <div className="space-y-6">
         {/* ==================== Header ==================== */}
@@ -1446,5 +1448,6 @@ export default function ApiKeysPage() {
         </AlertDialog>
       </div>
     </TooltipProvider>
+    </RoleGate>
   );
 }

@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     const admin = await db.user.create({
       data: {
-        name: 'John Manager',
+        name: 'John Administrateur',
         email: 'john@smartticketqr.com',
         password: hashedPassword,
         role: 'admin',
@@ -146,12 +146,32 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const operator = await db.user.create({
+    const caisse = await db.user.create({
       data: {
-        name: 'Sarah Operator',
-        email: 'sarah@smartticketqr.com',
+        name: 'Aminata Caisse',
+        email: 'aminata@smartticketqr.com',
         password: hashedPassword,
-        role: 'operator',
+        role: 'caisse',
+        organizationId: orgId,
+      },
+    });
+
+    const controleur = await db.user.create({
+      data: {
+        name: 'Ibrahima Controleur',
+        email: 'ibrahima@smartticketqr.com',
+        password: hashedPassword,
+        role: 'controleur',
+        organizationId: orgId,
+      },
+    });
+
+    const comptable = await db.user.create({
+      data: {
+        name: 'Fatou Comptable',
+        email: 'fatou@smartticketqr.com',
+        password: hashedPassword,
+        role: 'comptable',
         organizationId: orgId,
       },
     });
@@ -218,7 +238,7 @@ export async function POST(request: NextRequest) {
         price: 10,
         currency: 'USD',
         status: 'active',
-        userId: operator.id,
+        userId: controleur.id,
         image: '/images/ferry-goree.jpg',
         organizationId: orgId,
       },
@@ -282,7 +302,7 @@ export async function POST(request: NextRequest) {
 
     for (const event of allEvents) {
       const ticketCount = Math.min(50, event.soldTickets);
-      const users = [superAdmin, admin, operator];
+      const users = [superAdmin, admin, caisse, controleur, comptable];
 
       for (let i = 0; i < ticketCount; i++) {
         const firstName = firstNames[i % firstNames.length];
@@ -325,7 +345,7 @@ export async function POST(request: NextRequest) {
       .map(ticket => ({
         ticketId: ticket.id,
         eventId: ticket.eventId,
-        scannedBy: operator.id,
+        scannedBy: controleur.id,
         organizationId: ticket.event.organizationId,
         result: 'valid' as const,
         deviceInfo: 'Mobile Scanner v2.1',
@@ -341,7 +361,7 @@ export async function POST(request: NextRequest) {
       data: invalidTickets.map(t => ({
         ticketId: t.id,
         eventId: t.eventId,
-        scannedBy: operator.id,
+        scannedBy: controleur.id,
         organizationId: t.event.organizationId,
         result: 'already_used' as const,
         deviceInfo: 'Mobile Scanner v2.1',
@@ -373,11 +393,11 @@ export async function POST(request: NextRequest) {
       { userId: superAdmin.id, organizationId: orgId, action: 'user.register', details: 'Super admin account created' },
       { userId: admin.id, organizationId: orgId, action: 'event.create', details: 'Created Tech Conference Senegal' },
       { userId: admin.id, organizationId: orgId, action: 'ticket.create', details: 'Bulk generated 50 tickets for Tech Conference' },
-      { userId: operator.id, organizationId: orgId, action: 'scan.validate', details: 'Validated 15 tickets at Main Entrance' },
-      { userId: operator.id, organizationId: orgId, action: 'scan.validate', details: 'Rejected 3 already-used tickets' },
+      { userId: controleur.id, organizationId: orgId, action: 'scan.validate', details: 'Validated 15 tickets at Main Entrance' },
+      { userId: controleur.id, organizationId: orgId, action: 'scan.validate', details: 'Rejected 3 already-used tickets' },
       { userId: superAdmin.id, organizationId: orgId, action: 'system.seed', details: 'Database seeded with demo data' },
       { userId: admin.id, organizationId: orgId, action: 'report.export', details: 'Exported ticket report for Music Festival' },
-      { userId: operator.id, organizationId: orgId, action: 'ticket.validate', details: 'Validated 20 tickets for ferry service' },
+      { userId: controleur.id, organizationId: orgId, action: 'ticket.validate', details: 'Validated 20 tickets for ferry service' },
     ];
 
     await db.activityLog.createMany({ data: activityLogs });
@@ -391,7 +411,7 @@ export async function POST(request: NextRequest) {
         subscriptionPlan: org.subscriptionPlan,
       },
       stats: {
-        users: 3,
+        users: 5,
         events: allEvents.length,
         tickets: ticketsToCreate.length,
         scans: scansToCreate.length + invalidTickets.length,

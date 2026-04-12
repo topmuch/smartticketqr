@@ -52,7 +52,7 @@ export default function LoginPage() {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
-  const [regRole, setRegRole] = useState('operator');
+  const [regRole, setRegRole] = useState('caisse');
 
   const authStore = useAuthStore();
   const appStore = useAppStore();
@@ -638,12 +638,12 @@ export default function LoginPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="super_admin">
-                                    Super Admin
+                                    👑 Super Admin
                                   </SelectItem>
-                                  <SelectItem value="admin">Admin</SelectItem>
-                                  <SelectItem value="operator">
-                                    Operator
-                                  </SelectItem>
+                                  <SelectItem value="admin">👑 Admin</SelectItem>
+                                  <SelectItem value="caisse">💰 Caisse (Vendeur)</SelectItem>
+                                  <SelectItem value="controleur">📱 Contrôleur</SelectItem>
+                                  <SelectItem value="comptable">📊 Comptable</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -714,11 +714,12 @@ export default function LoginPage() {
             <div className="mt-3 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
               <p className="font-medium text-foreground/80 flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3 text-emerald-500" />
-                Demo Credentials
+                Demo Credentials (RBAC)
               </p>
-              <p>Admin: admin@smartticketqr.com</p>
-              <p>Manager: john@smartticketqr.com</p>
-              <p>Operator: sarah@smartticketqr.com</p>
+              <p>👑 Admin: john@smartticketqr.com</p>
+              <p>💰 Caisse: aminata@smartticketqr.com</p>
+              <p>📱 Contrôleur: ibrahima@smartticketqr.com</p>
+              <p>📊 Comptable: fatou@smartticketqr.com</p>
               <p>Password: Admin@123</p>
             </div>
           </div>

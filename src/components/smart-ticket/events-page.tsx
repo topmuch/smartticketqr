@@ -31,7 +31,7 @@ import {
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
 import { useAppStore } from '@/store/app-store';
-import { usePermissions } from '@/hooks/use-permissions';
+import { usePermissions, useCanAny, type Permission } from '@/hooks/use-permissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -505,7 +505,7 @@ export default function EventsPage() {
             Manage your events, bus routes, and ferry services
           </p>
         </div>
-        <CanCreateEvent>
+        {useCanAny(['events.create' as Permission, 'events.edit' as Permission]) && (
           <Button
             onClick={() => {
               resetForm();
@@ -516,7 +516,7 @@ export default function EventsPage() {
             <Plus className="size-4" />
             Create Event
           </Button>
-        </CanCreateEvent>
+        )}
       </div>
 
       {/* ── Stats ───────────────────────────────────────────────────────── */}

@@ -26,6 +26,7 @@ import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import RoleGate from '@/components/smart-ticket/role-gate';
 
 interface SettingSection {
   id: string;
@@ -61,6 +62,7 @@ export default function SettingsPage() {
   };
 
   return (
+    <RoleGate permission="settings.view" redirectTo="dashboard">
     <div className="space-y-6">
       {/* Header */}
       <div>
@@ -595,5 +597,6 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+    </RoleGate>
   );
 }

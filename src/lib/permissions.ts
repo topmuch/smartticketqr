@@ -129,7 +129,7 @@ export const PERMISSION_MATRIX: Record<ClientRole, Permission[]> = {
     'team.view', 'team.create', 'team.edit', 'team.delete',
     'display.view', 'display.manage',
     'settings.view', 'settings.edit',
-    'logs.activity', 'logs.scan',
+    'logs.activity', 'logs.scan', 'logs.audit',
     'api_keys.manage', 'webhooks.manage',
     'data.delete',
   ],
@@ -155,6 +155,7 @@ export const PERMISSION_MATRIX: Record<ClientRole, Permission[]> = {
     'reports.view', 'reports.export',
     'logs.scan',
     'logs.activity',
+    'logs.audit',
   ],
 };
 
@@ -342,5 +343,5 @@ export const PERMISSION_LABELS: Record<string, { label: string; description: str
   'logs.scan': { label: 'Logs scan', description: 'Consulter les logs de scan' },
   'api_keys.manage': { label: 'Clés API', description: 'Gérer les clés API' },
   'webhooks.manage': { label: 'Webhooks', description: 'Gérer les webhooks' },
-  'data.delete': { label: 'Supprimer données', description: 'Supprimer des données sensibles' },
+  'logs.audit': { label: 'Logs audit', description: 'Consulter les logs d\'audit de sécurité' },
 };

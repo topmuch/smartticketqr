@@ -52,6 +52,7 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { cn } from '@/lib/utils';
+import RoleGate from '@/components/smart-ticket/role-gate';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -481,6 +482,7 @@ export default function BillingPage() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
+    <RoleGate permission="settings.edit" redirectTo="dashboard">
     <div className="space-y-6">
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -999,5 +1001,6 @@ export default function BillingPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </RoleGate>
   );
 }
