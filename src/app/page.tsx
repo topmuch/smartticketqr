@@ -3,7 +3,8 @@
 import React, { useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { useAppStore, type PageName } from '@/store/app-store';
-import LandingPage from '@/components/landing/landing-page';
+import { useLandingStore, type LandingPage } from '@/store/landing-store';
+import LoginPage from '@/components/smart-ticket/login-page';
 import AppShell from '@/components/smart-ticket/app-shell';
 import Dashboard from '@/components/smart-ticket/dashboard';
 import EventsPage from '@/components/smart-ticket/events-page';
@@ -25,8 +26,19 @@ import CustomDomainsPage from '@/components/smart-ticket/custom-domains-page';
 import AutomationPage from '@/components/smart-ticket/automation-page';
 import SupportPage from '@/components/smart-ticket/support-page';
 import AffiliatesPage from '@/components/smart-ticket/affiliates-page';
+import LandingNavbar from '@/components/landing/landing-navbar';
+import LandingFooter from '@/components/landing/landing-footer';
+import LandingHomePage from '@/components/landing/home-page';
+import LandingPricingPage from '@/components/landing/pricing-page';
+import LandingDemoPage from '@/components/landing/demo-page';
+import LandingAboutPage from '@/components/landing/about-page';
+import LandingContactPage from '@/components/landing/contact-page';
+import LandingPrivacyPage from '@/components/landing/privacy-page';
+import LandingLoginPage from '@/components/landing/landing-login';
+import LandingRegisterPage from '@/components/landing/landing-register';
 
 const pageComponents: Record<PageName, React.ComponentType> = {
+  login: LoginPage,
   dashboard: Dashboard,
   events: EventsPage,
   tickets: TicketsPage,
@@ -44,18 +56,31 @@ const pageComponents: Record<PageName, React.ComponentType> = {
   webhooks: WebhooksPage,
   'fraud-alerts': FraudAlertsPage,
   'custom-domains': CustomDomainsPage,
-  'automation': AutomationPage,
-  'support': SupportPage,
-  'affiliates': AffiliatesPage,
+  automation: AutomationPage,
+  support: SupportPage,
+  affiliates: AffiliatesPage,
+};
+
+const landingComponents: Record<LandingPage, React.ComponentType> = {
+  home: LandingHomePage,
+  pricing: LandingPricingPage,
+  demo: LandingDemoPage,
+  about: LandingAboutPage,
+  contact: LandingContactPage,
+  privacy: LandingPrivacyPage,
+  login: LandingLoginPage,
+  register: LandingRegisterPage,
 };
 
 export default function Home() {
   const { isAuthenticated, token, user } = useAuthStore();
   const { currentPage, setCurrentPage } = useAppStore();
+  const { currentLandingPage } = useLandingStore();
 
   // Verify token validity on mount
   useEffect(() => {
     if (isAuthenticated && token) {
+      // Check if token is still valid
       fetch('/api/auth/me', {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -65,7 +90,7 @@ export default function Home() {
         .then((res) => {
           if (!res.ok) {
             useAuthStore.getState().logout();
-            setCurrentPage('dashboard');
+            setCurrentPage('login');
           }
         })
         .catch(() => {
@@ -74,9 +99,24 @@ export default function Home() {
     }
   }, [isAuthenticated, token, setCurrentPage]);
 
-  // Show landing page for unauthenticated visitors
+  // Redirect to landing pages when not authenticated
   if (!isAuthenticated || !user) {
-    return <LandingPage />;
+    const LandingComponent = landingComponents[currentLandingPage] || LandingHomePage;
+
+    // Login and register pages don't show navbar/footer
+    if (currentLandingPage === 'login' || currentLandingPage === 'register') {
+      return <LandingComponent />;
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <LandingNavbar />
+        <main className="flex-1">
+          <LandingComponent />
+        </main>
+        <LandingFooter />
+      </div>
+    );
   }
 
   // Get the current page component
