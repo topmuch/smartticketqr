@@ -169,10 +169,13 @@ export async function POST(request: NextRequest) {
     let statusMessage = 'Ticket validated successfully!';
     const isRoundTrip = ticket.fareType?.slug === 'round_trip';
     const scanCount = ticket.scans?.length || 0;
+    const roundTripMaxScans = isRoundTrip ? 2 : 1;
 
-    if (ticket.status === 'used') {
+    if (ticket.status === 'used' || ticket.status === 'completed') {
       scanStatus = 'used';
-      statusMessage = 'Ticket has already been used';
+      statusMessage = isRoundTrip
+        ? 'Billet aller-retour déjà complété'
+        : 'Ticket has already been used';
     } else if (ticket.status === 'cancelled') {
       scanStatus = 'invalid';
       statusMessage = 'Ticket has been cancelled';
@@ -184,6 +187,10 @@ export async function POST(request: NextRequest) {
         where: { id: ticket.id },
         data: { status: 'expired' },
       });
+    } else if (isRoundTrip && scanCount >= roundTripMaxScans) {
+      // Round-trip ticket already scanned twice
+      scanStatus = 'used';
+      statusMessage = 'Billet aller-retour déjà complété (2/2)';
     }
 
     // Step 8: Geolocation check
@@ -209,22 +216,28 @@ export async function POST(request: NextRequest) {
       geoDistance: geoCheck.distance,
     });
 
-    // Step 10: If valid, mark ticket as used (transactional)
+    // Step 10: If valid, record scan (transactional)
+    const isFinalScan = scanStatus === 'valid'
+      ? (isRoundTrip ? (scanCount + 1 >= roundTripMaxScans) : true)
+      : false;
+
     if (scanStatus === 'valid') {
       const now = new Date();
 
       await db.$transaction(async (tx) => {
-        // Mark ticket as used
-        await tx.ticket.update({
-          where: { id: ticket.id },
-          data: { status: 'used', validatedAt: now },
-        });
-
-        // Increment sold tickets count
-        await tx.event.update({
-          where: { id: ticket.eventId },
-          data: { soldTickets: { increment: 1 } },
-        });
+        // For round-trip: mark as 'used' only on 2nd scan. For normal: always mark 'used'.
+        if (isFinalScan) {
+          await tx.ticket.update({
+            where: { id: ticket.id },
+            data: { status: 'used', validatedAt: now },
+          });
+        } else {
+          // Round-trip 1st scan: keep 'active', just set validatedAt for first leg
+          await tx.ticket.update({
+            where: { id: ticket.id },
+            data: { validatedAt: now },
+          });
+        }
 
         // Create legacy scan record
         await tx.scan.create({
@@ -278,7 +291,9 @@ export async function POST(request: NextRequest) {
       status: scanStatus,
       sound_hint: scanStatus === 'valid' ? 'success' : 'error',
       message: isRoundTrip && scanStatus === 'valid'
-        ? `Aller validé (${scanCount}/2)`
+        ? isFinalScan
+          ? `Retour validé — Billet aller-retour complété (2/2)`
+          : `Aller validé (${scanCount + 1}/2) — Reste le retour`
         : statusMessage,
       qr_verified: qrVerified,
       scan_id: scanLog.id,

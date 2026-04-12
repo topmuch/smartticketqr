@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
       return corsResponse({ error: 'code, type, and value are required' }, 400);
     }
 
+    // Normalize type: accept both 'percentage' and 'percent', store as 'percent'
+    const normalizedType = type === 'percentage' ? 'percent' : type;
+
     const existing = await db.promoCode.findUnique({
       where: { organizationId_code: { organizationId: tenant.organizationId, code: code.toUpperCase() } },
     });
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
       data: {
         organizationId: tenant.organizationId,
         code: code.toUpperCase(),
-        type, // 'percent' or 'fixed'
+        type: normalizedType, // 'percent' or 'fixed'
         value: parseFloat(value) || 0,
         minTickets: parseInt(minTickets) || 1,
         validFrom: validFrom ? new Date(validFrom) : null,
