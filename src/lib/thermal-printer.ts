@@ -1,11 +1,11 @@
 // ============================================================
-// THERMAL PRINTER INTERFACE — Browser-based Printer Detection & Printing
+// 🖨️ THERMAL PRINTER INTERFACE — Browser-based Printer Detection & Printing
 // ============================================================
 // Supports Web Bluetooth, Web Serial, and window.print() fallback.
 // Works with ESC/POS-compatible thermal printers (58mm / 80mm).
 // ============================================================
 
-import { EscPosBuilder } from '@/lib/escpos-commands';
+import { EscPosBuilder, createReceipt } from '@/lib/escpos-commands';
 
 // ---- Type Aliases ----
 
@@ -190,10 +190,6 @@ export function isWebSerialSupported(): boolean {
 
 export function detectPrinterType(): PrinterType {
   if (safeIsWebBluetoothSupported()) {
-    const platform = detectPlatform();
-    // Android commonly uses BLE for thermal printers
-    if (platform === 'android') return 'bluetooth';
-    // Chrome on all platforms supports Web Bluetooth
     return 'bluetooth';
   }
 
@@ -390,7 +386,6 @@ export function generatePrintHTML(
   data: TicketPrintData,
   paperWidth: string,
 ): string {
-  const charWidth = paperWidth === '58mm' ? 32 : 48;
   const containerWidth = paperWidth === '58mm' ? '58mm' : '80mm';
   const fontSize = paperWidth === '58mm' ? '9px' : '11px';
 
@@ -412,7 +407,7 @@ export function generatePrintHTML(
   const endDateLine =
     data.event.endDate && data.event.endDate !== data.event.startDate
       ? `<div class="row"><span class="label">Fin :</span> <span class="value">${escapeHtml(data.event.endDate)}</span></div>`
-    : '';
+      : '';
 
   const expiresLine = data.ticket.expiresAt
     ? `<div class="row"><span class="label">Expire :</span> <span class="value">${escapeHtml(data.ticket.expiresAt)}</span></div>`
@@ -652,24 +647,20 @@ function printViaDialog(html: string): Promise<void> {
 
     iframe.onload = () => {
       try {
-        // Small delay to ensure rendering
         setTimeout(() => {
           try {
             iframe.contentWindow?.focus();
             iframe.contentWindow?.print();
-
-            // Remove iframe after print dialog closes
-            // Note: print() is synchronous in some browsers, async in others
             setTimeout(() => {
               document.body.removeChild(iframe);
               resolve();
             }, 1000);
-          } catch (printErr) {
+          } catch {
             document.body.removeChild(iframe);
             reject(new Error(msg('sendFailed')));
           }
         }, 300);
-      } catch (err) {
+      } catch {
         document.body.removeChild(iframe);
         reject(new Error(msg('sendFailed')));
       }
@@ -680,7 +671,6 @@ function printViaDialog(html: string): Promise<void> {
       reject(new Error(msg('sendFailed')));
     };
 
-    // Write HTML into iframe
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!doc) {
       document.body.removeChild(iframe);
@@ -738,7 +728,6 @@ export class ThermalPrintManager {
         return result;
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        // If user cancelled, return immediately
         if (errorMessage.includes(msg('userCancelled'))) {
           return {
             success: false,
@@ -834,9 +823,20 @@ export class ThermalPrintManager {
    */
   async testPrint(): Promise<void> {
     if (safeIsWebBluetoothSupported() && this.bluetoothPrinter.isConnected()) {
-      // Build a minimal test buffer
-      const builder = new EscPosBuilder({ paperWidth: 48 });
-      builder.init().align('center').bold(msg('testPrintHeader'), true).newLine(3).cut(true);
+      const paperW = this.paperWidth === '58mm' ? 58 : 80;
+      const builder = createReceipt(paperW);
+      builder
+        .init()
+        .align('center')
+        .bold(msg('testPrintHeader'))
+        .newLine()
+        .text(new Date().toLocaleString())
+        .newLine()
+        .line()
+        .text('SmartTicketQR')
+        .line()
+        .newLine()
+        .cut(true);
       await this.bluetoothPrinter.printReceipt(builder);
       return;
     }
@@ -881,6 +881,70 @@ export class ThermalPrintManager {
     await this.bluetoothPrinter.disconnect();
   }
 
+  // ---- Private: Build ESC/POS buffer from ticket data ----
+
+  /**
+   * Build an EscPosBuilder with all ticket receipt commands.
+   */
+  buildEscPosBuffer(data: TicketPrintData, options?: PrintOptions): EscPosBuilder {
+    const w = options?.paperWidth === '58mm' ? 58 : 80;
+    const builder = createReceipt(w);
+
+    builder
+      .init()
+      // Header: Organization name
+      .align('center')
+      .textSize(data.orgName || 'SmartTicketQR', 2, 2)
+      .newLine()
+      .text(`[${data.ticket.type.toUpperCase()}]`)
+      .doubleLine()
+      // Event info
+      .align('left')
+      .bold(data.event.name)
+      .newLine()
+      .text(`Date    : ${data.event.startDate}`)
+      .text(`Lieu    : ${data.event.location || 'N/A'}`)
+      .line()
+      // Holder info
+      .bold(`Passager: ${data.ticket.holderName}`)
+      .text(`Siege   : ${data.ticket.seatNumber || 'N/A'}`)
+      .text(`Tel     : ${data.ticket.holderPhone || 'N/A'}`)
+      .line()
+      // Ticket details
+      .text(`Code    : ${data.ticket.code}`)
+      .text(`Type    : ${data.ticket.type}`)
+      .text(`Statut  : ${data.ticket.status.toUpperCase()}`)
+      .text(`Emis le : ${data.ticket.issuedAt}`)
+      .line()
+      // Price
+      .align('center')
+      .textSize(`${data.ticket.currency} ${data.ticket.price.toFixed(2)}`, 2, 2)
+      .align('left')
+      .newLine();
+
+    // QR Code
+    const qrPayload = JSON.stringify({
+      tc: data.ticket.code,
+      e: data.event.name,
+      h: data.ticket.holderName,
+    });
+    builder.align('center').qrCode(qrPayload, w === 58 ? 4 : 6).newLine(2);
+
+    // Footer
+    builder
+      .line()
+      .align('center')
+      .text('Ce billet est non transferable.')
+      .text("Presentez-le a l'entree.")
+      .newLine(2);
+
+    if (options?.autoCut !== false) {
+      builder.cut(true);
+    }
+
+    return builder;
+  }
+
   // ---- Private: Print strategies ----
 
   private async printViaBluetooth(
@@ -888,19 +952,11 @@ export class ThermalPrintManager {
     options: PrintOptions | undefined,
     copies: number,
   ): Promise<PrintResult> {
-    // Connect if not already connected
     if (!this.bluetoothPrinter.isConnected()) {
       await this.bluetoothPrinter.connect();
     }
 
-    const builder = new EscPosBuilder({ paperWidth: 48 });
-    // Build the ESC/POS commands from ticket data
-    this.buildTicketCommands(builder, ticketData, options);
-
-    if (options?.autoCut !== false) {
-      builder.cut(true);
-    }
-
+    const builder = this.buildEscPosBuffer(ticketData, options);
     const data = builder.toBuffer();
 
     for (let i = 0; i < copies; i++) {
@@ -909,7 +965,6 @@ export class ThermalPrintManager {
       }
       await this.bluetoothPrinter.send(data);
 
-      // Delay between copies
       if (i < copies - 1) {
         await new Promise((r) => setTimeout(r, 500));
       }
@@ -941,13 +996,7 @@ export class ThermalPrintManager {
       }
 
       try {
-        const builder = new EscPosBuilder({ paperWidth: 48 });
-        this.buildTicketCommands(builder, ticketData, options);
-
-        if (options?.autoCut !== false) {
-          builder.cut(true);
-        }
-
+        const builder = this.buildEscPosBuffer(ticketData, options);
         const data = builder.toBuffer();
 
         for (let i = 0; i < copies; i++) {
@@ -972,61 +1021,6 @@ export class ThermalPrintManager {
       method: 'serial',
       timestamp: getTimestamp(),
     };
-  }
-
-  /**
-   * Populate an EscPosBuilder with ticket data commands.
-   * Delegates to the builder's API for formatting.
-   */
-  private buildTicketCommands(
-    builder: EscPosBuilder,
-    data: TicketPrintData,
-    _options?: PrintOptions,
-  ): void {
-    builder
-      .init()
-      .align('center')
-      .textSize(data.orgName || 'SmartTicketQR', 2, 2)
-      .text('')
-      .textSize(`[${data.ticket.type.toUpperCase()}]`, 1, 1)
-      .doubleLine()
-      .align('left')
-      .bold(data.event.name)
-      .text('')
-      .text(`Date: ${data.event.startDate}`)
-      .text(`Lieu: ${data.event.location || 'N/A'}`)
-      .line()
-      .bold(`Passager: ${data.ticket.holderName}`)
-      .text(`Siege: ${data.ticket.seatNumber || 'N/A'}`)
-      .text(`Tel: ${data.ticket.holderPhone || 'N/A'}`)
-      .line()
-      .text(`Code: ${data.ticket.code}`)
-      .text(`Type: ${data.ticket.type}`)
-      .text(`Statut: ${data.ticket.status.toUpperCase()}`)
-      .text(`Emis le: ${data.ticket.issuedAt}`)
-      .line()
-      .align('center')
-      .textSize(`${data.ticket.currency} ${data.ticket.price.toFixed(2)}`, 2, 2)
-      .newLine();
-
-    // QR Code or barcode
-    if (data.qrDataUrl) {
-      const qrPayload = JSON.stringify({
-        tc: data.ticket.code,
-        e: data.event.name,
-        h: data.ticket.holderName,
-      });
-      builder.qrCode(qrPayload);
-    } else {
-      builder.barcode(data.ticket.code);
-    }
-
-    builder
-      .newLine()
-      .line()
-      .text('Ce billet est non transferable.')
-      .text("Presentez-le a l'entree.")
-      .newLine(2);
   }
 }
 

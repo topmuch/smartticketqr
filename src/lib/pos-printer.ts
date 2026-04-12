@@ -10,18 +10,7 @@
 //   const result = await printTicket(escposBytes, { paperWidth: 58 });
 // ============================================================
 
-import {
-  buildEscPosTicket,
-  escposInit,
-  escposText,
-  escposCenteredText,
-  escposSeparator,
-  escposCharSize,
-  escposBold,
-  escposFeedLines,
-  escposCut,
-  type EscPosTicketData,
-} from '@/lib/escpos-commands';
+import { buildEscPosTicket, type EscPosTicketData, createReceipt } from '@/lib/escpos-commands';
 
 // ---- Types ----
 
@@ -61,14 +50,12 @@ async function loadCapacitor(): Promise<any> {
   if (_capacitor !== null) return _capacitor;
 
   try {
-    // Dynamic import — Capacitor may not be bundled in web-only builds
     _capacitor = await import('@capacitor/core');
     console.log('[POSPrinter] Capacitor core loaded successfully');
     return _capacitor;
   } catch (err) {
     console.warn(
       '[POSPrinter] Capacitor core not available. Running in web-only mode.',
-      err
     );
     _capacitor = null;
     return null;
@@ -79,16 +66,14 @@ async function loadCapacitor(): Promise<any> {
  * Check if the app is running inside a Capacitor native shell.
  */
 export function isCapacitorNative(): boolean {
-  // Cache the result after first check
   if (_isNative !== null) return _isNative;
 
   try {
-    // Check for the Capacitor native platform bridge injected by the runtime
     _isNative =
       typeof window !== 'undefined' &&
       !!(window as any).Capacitor?.isNativePlatform?.();
     console.log(
-      `[POSPrinter] Native platform check: ${_isNative ? 'YES' : 'NO'}`
+      `[POSPrinter] Native platform check: ${_isNative ? 'YES' : 'NO'}`,
     );
   } catch {
     _isNative = false;
@@ -149,9 +134,6 @@ async function getPlugin(): Promise<any | null> {
 
 /**
  * Check if the native POS printer plugin is available.
- * Returns true only if:
- *   1. Running inside a Capacitor native app, AND
- *   2. The POSPrinter native plugin is installed and registered.
  */
 export async function isPOSPrinterAvailable(): Promise<boolean> {
   if (!isCapacitorNative()) {
@@ -165,17 +147,10 @@ export async function isPOSPrinterAvailable(): Promise<boolean> {
 
 /**
  * Send raw ESC/POS bytes to the native printer.
- *
- * This is the low-level bridge function. In most cases, use `printTicket()`
- * instead, which accepts structured ticket data and builds the ESC/POS
- * buffer automatically.
- *
- * @param data    — Raw ESC/POS byte sequence (e.g. from escpos-commands)
- * @param options — Print configuration (paper width, density, copies, etc.)
  */
 export async function printESCPOS(
   data: Uint8Array,
-  options?: POSPrintOptions
+  options?: POSPrintOptions,
 ): Promise<POSPrintResult> {
   const opts: POSPrintOptions = {
     paperWidth: options?.paperWidth ?? 58,
@@ -188,20 +163,15 @@ export async function printESCPOS(
   console.log(
     `[POSPrinter] printESCPOS called — ${data.length} bytes, ` +
       `paperWidth=${opts.paperWidth}mm, density=${opts.density}, ` +
-      `copies=${opts.copies}, autoCut=${opts.autoCut}`
+      `copies=${opts.copies}, autoCut=${opts.autoCut}`,
   );
 
-  // Check native availability
   if (!isCapacitorNative()) {
     const msg =
       'Cannot print: not running inside a Capacitor native app. ' +
-      'Use a web fallback (RawBT / Bluetooth) for browser-based printing.';
+      'Use a web fallback (Bluetooth / print dialog) for browser-based printing.';
     console.warn(`[POSPrinter] ${msg}`);
-    return {
-      success: false,
-      message: msg,
-      error: 'CAPACITOR_NOT_NATIVE',
-    };
+    return { success: false, message: msg, error: 'CAPACITOR_NOT_NATIVE' };
   }
 
   const plugin = await getPlugin();
@@ -211,19 +181,14 @@ export async function printESCPOS(
       'Native POSPrinter plugin not available. Ensure the native plugin ' +
       'is installed (npx cap sync) and the POS hardware is connected.';
     console.error(`[POSPrinter] ${msg}`);
-    return {
-      success: false,
-      message: msg,
-      error: 'PLUGIN_NOT_AVAILABLE',
-    };
+    return { success: false, message: msg, error: 'PLUGIN_NOT_AVAILABLE' };
   }
 
   try {
-    // Convert Uint8Array to Base64 for safe transfer across the bridge
     const base64Data = uint8ArrayToBase64(data);
 
     console.log(
-      `[POSPrinter] Invoking native print — base64 length=${base64Data.length}`
+      `[POSPrinter] Invoking native print — base64 length=${base64Data.length}`,
     );
 
     const result = await plugin.print({
@@ -253,19 +218,13 @@ export async function printESCPOS(
 
 /**
  * Print a ticket from an EscPosBuilder output (Uint8Array buffer).
- *
- * This is the primary high-level function. Pass the raw byte output
- * from `buildEscPosTicket()` or any manually constructed ESC/POS buffer.
- *
- * @param builderOutput — ESC/POS byte sequence to print
- * @param options       — Print configuration overrides
  */
 export async function printTicket(
   builderOutput: Uint8Array,
-  options?: POSPrintOptions
+  options?: POSPrintOptions,
 ): Promise<POSPrintResult> {
   console.log(
-    `[POSPrinter] printTicket called — buffer size=${builderOutput.length} bytes`
+    `[POSPrinter] printTicket called — buffer size=${builderOutput.length} bytes`,
   );
 
   if (!(builderOutput instanceof Uint8Array)) {
@@ -289,20 +248,14 @@ export async function printTicket(
 
 /**
  * Print a ticket from structured ticket data.
- *
- * Convenience function that builds the ESC/POS buffer internally
- * using `buildEscPosTicket()` and then sends it to the printer.
- *
- * @param ticket  — Structured ticket data
- * @param options — Print configuration overrides
  */
 export async function printTicketFromData(
   ticket: EscPosTicketData,
-  options?: POSPrintOptions
+  options?: POSPrintOptions,
 ): Promise<POSPrintResult> {
   console.log(
     `[POSPrinter] printTicketFromData — code=${ticket.ticketCode}, ` +
-      `event="${ticket.eventName}"`
+      `event="${ticket.eventName}"`,
   );
 
   const buffer = buildEscPosTicket(ticket);
@@ -311,27 +264,18 @@ export async function printTicketFromData(
 
 /**
  * Query the current status of the connected POS printer.
- *
- * Returns connection state, printer model, and paper width
- * as reported by the native plugin.
  */
 export async function getPrinterStatus(): Promise<POSPrinterStatus> {
   console.log('[POSPrinter] getPrinterStatus called');
 
   if (!isCapacitorNative()) {
-    return {
-      connected: false,
-      error: 'CAPACITOR_NOT_NATIVE',
-    };
+    return { connected: false, error: 'CAPACITOR_NOT_NATIVE' };
   }
 
   const plugin = await getPlugin();
 
   if (!plugin) {
-    return {
-      connected: false,
-      error: 'PLUGIN_NOT_AVAILABLE',
-    };
+    return { connected: false, error: 'PLUGIN_NOT_AVAILABLE' };
   }
 
   try {
@@ -347,80 +291,49 @@ export async function getPrinterStatus(): Promise<POSPrinterStatus> {
   } catch (err: any) {
     const errorMsg = err?.message ?? 'Failed to query printer status';
     console.error(`[POSPrinter] Status error: ${errorMsg}`, err);
-    return {
-      connected: false,
-      error: errorMsg,
-    };
+    return { connected: false, error: errorMsg };
   }
 }
 
 /**
  * Print a test page to verify printer connectivity and configuration.
- *
- * Prints a short diagnostic page with:
- *   - Printer initialization
- *   - "TEST PRINT" header
- *   - A separator line
- *   - "SmartTicketQR POS Printer OK"
- *   - Timestamp
- *   - Paper cut
  */
 export async function testPrint(): Promise<POSPrintResult> {
   console.log('[POSPrinter] testPrint called');
 
-  // Build a simple test page
-  const segments: Uint8Array[] = [];
+  const builder = createReceipt(58);
+  builder
+    .init()
+    .align('center')
+    .textSize('TEST PRINT', 2, 2)
+    .newLine()
+    .doubleLine()
+    .textSize('SmartTicketQR', 1, 1)
+    .bold('POS Printer OK')
+    .newLine()
+    .line()
+    .text(new Date().toISOString())
+    .newLine(2)
+    .cut(true);
 
-  segments.push(escposInit());
-  segments.push(escposFeedLines(1));
-  segments.push(escposCharSize(2, 2));
-  segments.push(escposCenteredText('TEST PRINT'));
-  segments.push(escposCharSize(1, 1));
-  segments.push(escposSeparator('=', 32));
-  segments.push(escposFeedLines(1));
-  segments.push(escposBold(true));
-  segments.push(escposCenteredText('SmartTicketQR'));
-  segments.push(escposCenteredText('POS Printer OK'));
-  segments.push(escposBold(false));
-  segments.push(escposSeparator('-', 32));
-  segments.push(escposCenteredText(new Date().toISOString()));
-  segments.push(escposCenteredText(`Platform: ${typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 40) : 'unknown'}`));
-  segments.push(escposFeedLines(2));
-  segments.push(escposCut('partial'));
-
-  // Combine into a single buffer
-  const totalLen = segments.reduce((sum, s) => sum + s.length, 0);
-  const buffer = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const seg of segments) {
-    buffer.set(seg, offset);
-    offset += seg.length;
-  }
-
-  return printESCPOS(buffer, { paperWidth: 58 });
+  return printESCPOS(builder.toBuffer(), { paperWidth: 58 });
 }
 
 // ---- Utility helpers ----
 
-/**
- * Convert a Uint8Array to a Base64 string for safe bridge transfer.
- */
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  // Use btoa in browser environments; Buffer in Node
   if (typeof btoa !== 'undefined') {
     return btoa(binary);
   }
-  // Server-side fallback
   return Buffer.from(binary, 'binary').toString('base64');
 }
 
 /**
- * Reset the internal Capacitor cache.
- * Useful for testing or after hot-reloading.
+ * Reset the internal Capacitor cache (useful for testing).
  */
 export function _reset(): void {
   _capacitor = null;
