@@ -5,6 +5,9 @@ import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleC
 /**
  * GET /api/scan-logs - List scan logs for the current organization
  * Query params: page, limit, status, startDate, endDate, operatorId
+ *
+ * Note: ScanLog has ticketId/eventId as plain strings (not Prisma relations),
+ * so we fetch tickets and events separately and join in-memory.
  */
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
@@ -34,10 +37,6 @@ export async function GET(request: NextRequest) {
     const [data, total] = await Promise.all([
       db.scanLog.findMany({
         where,
-        include: {
-          ticket: { select: { id: true, ticketCode: true, holderName: true, ticketType: true } },
-          event: { select: { id: true, name: true, type: true } },
-        },
         orderBy: { scannedAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -45,12 +44,34 @@ export async function GET(request: NextRequest) {
       db.scanLog.count({ where }),
     ]);
 
-    // Get operator names
-    const operatorIds = [...new Set(data.map((l) => l.operatorId))];
-    const operators = await db.user.findMany({
-      where: { id: { in: operatorIds } },
-      select: { id: true, name: true },
-    });
+    // Fetch related tickets, events, and operators in parallel
+    const ticketIds = [...new Set(data.map((l) => l.ticketId).filter(Boolean))];
+    const eventIds = [...new Set(data.map((l) => l.eventId).filter(Boolean))];
+    const operatorIds = [...new Set(data.map((l) => l.operatorId).filter(Boolean))];
+
+    const [tickets, events, operators] = await Promise.all([
+      ticketIds.length > 0
+        ? db.ticket.findMany({
+            where: { id: { in: ticketIds } },
+            select: { id: true, ticketCode: true, holderName: true, ticketType: true },
+          })
+        : [],
+      eventIds.length > 0
+        ? db.event.findMany({
+            where: { id: { in: eventIds } },
+            select: { id: true, name: true, type: true },
+          })
+        : [],
+      operatorIds.length > 0
+        ? db.user.findMany({
+            where: { id: { in: operatorIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+    ]);
+
+    const ticketMap = new Map(tickets.map((t) => [t.id, t]));
+    const eventMap = new Map(events.map((e) => [e.id, e]));
     const operatorMap = new Map(operators.map((o) => [o.id, o.name]));
 
     const enrichedData = data.map((log) => ({
@@ -67,8 +88,8 @@ export async function GET(request: NextRequest) {
       isSynced: log.isSynced,
       geoAlert: log.geoAlert,
       geoDistance: log.geoDistance,
-      ticket: log.ticket,
-      event: log.event,
+      ticket: ticketMap.get(log.ticketId) || null,
+      event: eventMap.get(log.eventId) || null,
     }));
 
     return corsResponse({

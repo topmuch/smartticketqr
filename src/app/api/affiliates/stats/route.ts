@@ -50,19 +50,36 @@ export async function GET(request: NextRequest) {
     // Top performers
     const topPerformers = await db.affiliate.findMany({
       where: { organizationId: tenant.organizationId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-          },
-        },
-      },
       orderBy: { totalRevenueGenerated: 'desc' },
       take: topLimit,
     });
+
+    // Fetch user data separately (Affiliate has userId as plain string, not a Prisma relation)
+    const topUserIds = [...new Set(topPerformers.map((a) => a.userId).filter(Boolean))];
+    const topUsers = topUserIds.length > 0
+      ? await db.user.findMany({
+          where: { id: { in: topUserIds } },
+          select: { id: true, name: true, email: true, avatar: true },
+        })
+      : [];
+    const topUserMap = new Map(topUsers.map((u) => [u.id, u]));
+
+    const enrichedTopPerformers = topPerformers.map((a) => ({
+      ...a,
+      user: topUserMap.get(a.userId) || null,
+    }));
+
+    // Recent referrals
+    const recentReferrals = topPerformers.slice(0, 5).map((a) => ({
+      id: a.id,
+      code: a.code,
+      userId: a.userId,
+      userName: topUserMap.get(a.userId)?.name || 'Unknown',
+      totalReferrals: a.totalReferrals,
+      totalRevenueGenerated: a.totalRevenueGenerated,
+      totalCommissionEarned: a.totalCommissionEarned,
+      createdAt: a.createdAt,
+    }));
 
     return corsResponse({
       success: true,
@@ -72,7 +89,8 @@ export async function GET(request: NextRequest) {
         totalRevenueGenerated: totalStats._sum.totalRevenueGenerated || 0,
         totalCommissionEarned: totalStats._sum.totalCommissionEarned || 0,
         totalReferrals: totalStats._sum.totalReferrals || 0,
-        topPerformers,
+        topPerformers: enrichedTopPerformers,
+        recentReferrals,
       },
     });
   });

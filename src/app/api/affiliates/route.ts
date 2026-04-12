@@ -40,16 +40,6 @@ export async function GET(request: NextRequest) {
     const [affiliates, total] = await Promise.all([
       db.affiliate.findMany({
         where,
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatar: true,
-            },
-          },
-        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -57,9 +47,24 @@ export async function GET(request: NextRequest) {
       db.affiliate.count({ where }),
     ]);
 
+    // Fetch user data separately (Affiliate has userId as plain string, not a Prisma relation)
+    const userIds = [...new Set(affiliates.map((a) => a.userId).filter(Boolean))];
+    const users = userIds.length > 0
+      ? await db.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true, avatar: true },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    const enrichedAffiliates = affiliates.map((a) => ({
+      ...a,
+      user: userMap.get(a.userId) || null,
+    }));
+
     return corsResponse({
       success: true,
-      data: affiliates,
+      data: enrichedAffiliates,
       meta: {
         page,
         limit,

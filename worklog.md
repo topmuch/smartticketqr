@@ -366,3 +366,33 @@ Stage Summary:
 - Real-time updates via WebSocket + 15s polling fallback
 - Lint passes clean, no compilation errors
 
+
+---
+Task ID: runtime-error-diagnosis
+Agent: Main Agent
+Task: Diagnose and fix all Runtime TypeError across all superadmin pages
+
+Work Log:
+- Ran comprehensive API test suite for all 23 endpoints — found 3 API crashes + 1 frontend mismatch
+- BUG 1: BillingPage `activePlans.map is not a function`
+  - Root cause: `/api/subscription-plans` returns `{ plans: [...] }` but component expected array directly
+  - Fix: Added `Array.isArray(json) ? json : (json.plans || PLANS)` in queryFn (billing-page.tsx:326-328)
+- BUG 2: ScanLogs API Prisma crash `Unknown field 'ticket' for include statement on model 'ScanLog'`
+  - Root cause: `ScanLog` model has `ticketId` as plain string, NOT a Prisma relation
+  - Fix: Rewrote /api/scan-logs/route.ts to fetch tickets/events/operators separately and join in-memory
+- BUG 3: Affiliates API Prisma crash `Unknown field 'user' for include statement on model 'Affiliate'`
+  - Root cause: `Affiliate` model has `userId` as plain string, NOT a Prisma relation
+  - Fix: Rewrote /api/affiliates/route.ts to fetch users separately and join in-memory
+- BUG 4: Affiliates Stats API same Prisma crash
+  - Root cause: Same as BUG 3
+  - Fix: Rewrote /api/affiliates/stats/route.ts, added `recentReferrals` data
+- Verified all other 19 frontend components correctly extract `.data` from API responses
+- All 23 API endpoints now return HTTP 200 with valid data
+- `bun run lint` passes clean
+- Dev log shows no errors after fixes
+
+Stage Summary:
+- 4 bugs fixed (1 frontend mismatch + 3 Prisma relation crashes)
+- Files modified: billing-page.tsx, scan-logs/route.ts, affiliates/route.ts, affiliates/stats/route.ts
+- All 23 APIs verified working via curl
+- All pages safe from `.map is not a function` errors

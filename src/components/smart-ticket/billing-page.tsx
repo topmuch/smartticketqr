@@ -323,7 +323,9 @@ export default function BillingPage() {
         headers: getApiHeaders(),
       });
       if (!res.ok) return PLANS;
-      return res.json();
+      const json = await res.json();
+      // API returns { plans: [...] }
+      return Array.isArray(json) ? json : (json.plans || PLANS);
     },
   });
 
