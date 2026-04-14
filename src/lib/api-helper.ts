@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  PrismaClientKnownRequestError,
+  PrismaClientValidationError,
+  PrismaClientInitializationError,
+  PrismaClientRustPanicError,
+} from '@prisma/client/runtime/library';
 import { verifyToken, type JWTPayload } from '@/lib/auth';
 import { PERMISSION_MATRIX, type Permission } from './permissions';
 
@@ -197,21 +203,267 @@ export function tenantWhereWith(
 }
 
 // ============================================================
-// ERROR HANDLER (sanitized for production)
+// ERROR HANDLER (production-grade, context-aware, Prisma-safe)
+// ============================================================
+// Usage:
+//   withErrorHandler('create-ticket', async () => { ... })
+//   withErrorHandler(async () => { ... })             // context is optional
+//
+// Guarantees:
+//  • Stack traces are NEVER sent to the client.
+//  • Prisma errors are mapped to generic, user-friendly messages
+//    even in development (no raw SQL / table names leak).
+//  • Production always returns "Internal server error".
+//  • Rate-limit (429) errors automatically include a Retry-After header.
+//  • Full stack + context are always logged server-side for debugging.
 // ============================================================
 
-export async function withErrorHandler(fn: () => Promise<NextResponse | Response>): Promise<NextResponse | Response> {
-  try {
-    return await fn();
-  } catch (error) {
-    console.error('[Tenant API Error]', error);
+/**
+ * Map Prisma error codes to safe, user-facing messages.
+ * These intentionally avoid exposing database internals.
+ */
+const PRISMA_ERROR_MAP: Record<string, string> = {
+  P2002: 'A record with this value already exists',           // unique constraint
+  P2003: 'Referenced record not found',                       // foreign key constraint
+  P2004: 'A constraint on the database failed',               // constraint violation
+  P2005: 'Invalid value provided for a field',                // bad field value
+  P2006: 'Invalid value provided — data could not be stored', // bad input data
+  P2007: 'Data validation error',                             // data validation
+  P2008: 'Failed to parse the query',                         // query parsing
+  P2009: 'Query validation error',                            // query validation
+  P2010: 'Raw query returned an unexpected result',           // raw query
+  P2011: 'Null constraint violation',                         // null constraint
+  P2012: 'Missing required value for a field',                // missing value
+  P2013: 'Missing required argument',                         // missing arg
+  P2014: 'Invalid related record change would break relation', // relation error
+  P2015: 'Related record not found',                          // related record
+  P2016: 'Query interpretation error',                        // query error
+  P2017: 'Maximum query depth exceeded',                      // query depth
+  P2018: 'Related records not connected',                     // relation
+  P2019: 'Input error',                                       // general input
+  P2020: 'Value out of range for field',                      // out of range
+  P2021: 'Table not found in database',                       // table missing
+  P2022: 'Column not found in database',                      // column missing
+  P2023: 'Inconsistent column data',                          // column mismatch
+  P2024: 'Timed out fetching a new connection from pool',     // connection pool
+  P2025: 'Record not found',                                  // not found
+  P2026: 'Current transaction is already committed',           // transaction
+  P2027: 'Multiple fields with conflicting defaults',          // defaults
+  P2028: 'Transaction API error',                             // tx API
+  P2030: 'Full-text search failed',                           // full-text
+  P2033: 'Tuple comparison failed',                           // tuple
+  P2034: 'Transaction failed due to concurrent write',         // write conflict
+  P2035: 'Referenced row not found for update/delete',        // cascading
+  P2036: 'Foreign key constraint failed on update/delete',    // FK violation
+  P2037: 'Interactive transaction error',                     // interactive tx
+  P2038: 'Max 64 transaction parameters exceeded',            // tx params
+  P2039: 'Transaction already closed',                        // tx closed
+  P2040: 'Error serializing a DateTime value',                // datetime
+  P2041: 'Unable to acquire lock on table',                   // lock
+  P2042: 'Unable to acquire lock on row',                     // row lock
+  P2043: 'Lock on table already acquired',                    // table lock
+  P2044: 'Lock on row already acquired',                      // row lock
+  P2045: 'Unable to release a lock',                          // release
+  P2046: 'Transaction already closed',                        // tx closed
+  P2047: 'Unable to acquire lock on a connection pool',       // pool lock
+  P2048: 'Unable to acquire lock on a connection',            // conn lock
+  P2049: 'Timed out waiting to acquire a lock',               // lock timeout
+  P2050: 'Unable to acquire a transaction',                   // acquire tx
+  P2051: 'Unable to commit a transaction',                    // commit tx
+  P2052: 'Unable to rollback a transaction',                  // rollback tx
+  P2053: 'Unable to create a savepoint',                      // savepoint
+  P2054: 'Unable to release a savepoint',                     // release savepoint
+  P2055: 'Unable to rollback to a savepoint',                 // rollback savepoint
+  P2056: 'Unable to start a transaction',                     // start tx
+  P2057: 'Maximum 64 savepoints exceeded',                    // savepoint limit
+  P2058: 'Transaction already in progress',                   // tx progress
+  P2059: 'Unable to set savepoint isolation level',           // isolation
+  P2060: 'Unable to set transaction isolation level',         // isolation
+  P2061: 'Unable to acquire advisory lock',                   // advisory lock
+  P2062: 'Unable to release advisory lock',                   // advisory lock
+  P2063: 'Unable to execute raw query in transaction',        // raw query
+  P2064: 'Unable to execute raw query',                       // raw query
+  P2065: 'Unable to run function in interactive transaction', // interactive tx fn
+  P2066: 'Unable to run a query in an interactive transaction', // interactive tx query
+  P2067: 'Query returned no result',                          // no result
+  P2068: 'Query returned multiple results',                   // multiple results
+  P3000: 'Failed to create database',                         // db create
+  P3001: 'Failed to delete database',                         // db delete
+  P3002: 'Failed to migrate database',                        // migration
+  P3003: 'Failed to apply migration',                         // apply migration
+  P3004: 'Failed to rollback migration',                      // rollback
+  P3005: 'Failed to reset database',                          // reset
+  P3006: 'Failed to restore database from file',              // restore
+  P3007: 'Failed to resolve database URL',                    // URL
+  P3008: 'Failed to create database file',                    // file
+  P3009: 'Failed to get migrate progress',                    // progress
+  P3010: 'Failed to introspect database',                     // introspect
+  P3011: 'Failed to get migration progress',                  // migration progress
+  P3012: 'Failed to mark migration as applied',               // mark applied
+  P3013: 'Failed to mark migration as rolled back',           // mark rollback
+  P3014: 'Failed to get migration ID',                        // migration ID
+  P3015: 'Failed to apply migration',                         // apply
+  P3016: 'Failed to apply migration',                         // apply
+  P3017: 'Failed to apply migration',                         // apply
+  P3018: 'Failed to apply migration',                         // apply
+  P3019: 'Failed to apply migration',                         // apply
+  P3020: 'Failed to rollback migration',                      // rollback
+  P3021: 'Failed to create database proxy',                   // proxy
+};
 
+const DEFAULT_PRISMA_MESSAGE = 'A database error occurred';
+
+/**
+ * Detect Prisma errors and return a safe, user-facing message.
+ * This runs regardless of NODE_ENV — Prisma internals never leak.
+ */
+function classifyPrismaError(error: unknown): { message: string; status: number } | null {
+  if (error instanceof PrismaClientKnownRequestError) {
+    const userMessage = PRISMA_ERROR_MAP[error.code] ?? DEFAULT_PRISMA_MESSAGE;
+    // P2024 = pool timeout → 503 so the client can retry
+    // P2034 = write conflict → 409 so the client knows to retry
+    // P2025 = not found → 404
+    const statusMap: Record<string, number> = {
+      P2002: 409, // conflict
+      P2003: 400, // bad request (FK)
+      P2005: 400,
+      P2006: 400,
+      P2007: 400,
+      P2008: 400,
+      P2009: 400,
+      P2011: 400,
+      P2012: 400,
+      P2013: 400,
+      P2020: 400,
+      P2024: 503,
+      P2025: 404,
+      P2034: 409,
+      P2036: 400,
+      P2041: 423,
+      P2042: 423,
+      P2043: 423,
+      P2044: 423,
+      P2049: 423,
+    };
+    return { message: userMessage, status: statusMap[error.code] ?? 500 };
+  }
+
+  if (error instanceof PrismaClientValidationError) {
+    return { message: 'Invalid request data', status: 400 };
+  }
+
+  if (error instanceof PrismaClientInitializationError) {
+    return { message: 'Database is temporarily unavailable', status: 503 };
+  }
+
+  if (error instanceof PrismaClientRustPanicError) {
+    return { message: DEFAULT_PRISMA_MESSAGE, status: 500 };
+  }
+
+  return null;
+}
+
+/**
+ * Detect if an error represents a rate-limit response.
+ * Supports errors that carry status 429 or an explicit `retryAfter` property.
+ */
+function classifyRateLimitError(
+  error: unknown
+): { retryAfterSeconds: number } | null {
+  // HTTPError-like shape (fetch, axios, etc.)
+  if (error && typeof error === 'object') {
+    const e = error as Record<string, unknown>;
+    if ('status' in e && e.status === 429) {
+      const retryAfter = typeof e.retryAfter === 'number'
+        ? e.retryAfter
+        : 60; // default 60s
+      return { retryAfterSeconds: Math.max(1, retryAfter) };
+    }
+    if ('retryAfter' in e && typeof e.retryAfter === 'number') {
+      return { retryAfterSeconds: Math.max(1, e.retryAfter as number) };
+    }
+  }
+  return null;
+}
+
+export interface ErrorHandlerOptions {
+  /** A short tag identifying the operation, e.g. 'create-ticket', 'validate-scan'. */
+  context?: string;
+}
+
+export async function withErrorHandler(
+  fnOrContext: (() => Promise<NextResponse | Response>) | ErrorHandlerOptions,
+  fnMaybe?: () => Promise<NextResponse | Response>
+): Promise<NextResponse | Response> {
+  // Support two calling conventions:
+  //   withErrorHandler('ctx', fn)   — with context
+  //   withErrorHandler(fn)           — context omitted
+  let handler: () => Promise<NextResponse | Response>;
+  let context: string | undefined;
+
+  if (typeof fnOrContext === 'function') {
+    handler = fnOrContext;
+  } else {
+    context = fnOrContext.context;
+    handler = fnMaybe!;
+  }
+
+  try {
+    return await handler();
+  } catch (error) {
     const isProduction = process.env.NODE_ENV === 'production';
-    const message = isProduction
+    const tag = context ? `[${context}]` : '[Unhandled]';
+    const stack = error instanceof Error ? error.stack : undefined;
+
+    // ── 1. Prisma errors: always safe, never leak internals ────────
+    const prismaResult = classifyPrismaError(error);
+    if (prismaResult) {
+      console.error(
+        `\x1b[33m[Prisma Error] ${tag}\x1b[0m\n` +
+        `  Code: ${error instanceof PrismaClientKnownRequestError ? (error as PrismaClientKnownRequestError).code : 'N/A'}\n` +
+        `  Client message: ${prismaResult.message}\n` +
+        (stack ? `  Stack:\n${stack}\n` : '')
+      );
+
+      const clientMessage = isProduction ? 'Internal server error' : prismaResult.message;
+      return corsResponse({ error: clientMessage }, prismaResult.status);
+    }
+
+    // ── 2. Rate-limit errors: 429 + Retry-After header ─────────────
+    const rateLimit = classifyRateLimitError(error);
+    if (rateLimit) {
+      console.error(
+        `\x1b[33m[Rate Limit] ${tag} — retry after ${rateLimit.retryAfterSeconds}s\x1b[0m\n` +
+        (stack ? `  Stack:\n${stack}\n` : '')
+      );
+
+      return NextResponse.json(
+        { error: isProduction ? 'Too many requests' : `Rate limited — retry after ${rateLimit.retryAfterSeconds}s` },
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Retry-After': String(rateLimit.retryAfterSeconds),
+          },
+        }
+      );
+    }
+
+    // ── 3. Generic / unknown errors ─────────────────────────────────
+    // Log full stack to server console (both dev & prod) for debugging.
+    console.error(
+      `\x1b[31m[API Error] ${tag}\x1b[0m\n` +
+      `  Raw error: ${error instanceof Error ? error.message : String(error)}\n` +
+      (stack ? `  Stack:\n${stack}\n` : '')
+    );
+
+    // In production, NEVER reveal the raw message.
+    // In development, show the message for faster debugging — but never the stack.
+    const clientMessage = isProduction
       ? 'Internal server error'
       : (error instanceof Error ? error.message : 'Internal server error');
 
-    return corsResponse({ error: message }, 500);
+    return corsResponse({ error: clientMessage }, 500);
   }
 }
 
