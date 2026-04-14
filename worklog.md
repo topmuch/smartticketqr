@@ -80,3 +80,37 @@ Stage Summary:
 - API tests: Login, GET audio-list (4 global items), RBAC (admin can't POST), Board API (audioSettings + audioLibrary)
 - Note: Le serveur dev dans le sandbox est instable (OOM probable) — les tests curl fonctionnent mais nécessitent un script Node unifié
 - Le module audio est complet et prêt pour la production
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Complete Audio Library Integration - Fix missing files, integrate settings, test all functionality
+
+Work Log:
+- Read all audio-related files: prisma schema, API routes, components, helpers, i18n translations
+- Identified missing file: public-display-audio-player.tsx (was referenced in summary but never created)
+- Identified missing integration: AudioSettingsSection not integrated into settings-page.tsx
+- Created public-display-audio-player.tsx with usePublicAudioPlayer hook + PublicAudioOverlay component
+- Integrated AudioSettingsSection into settings-page.tsx as new "Audio" tab
+- Ran TypeScript audit: 0 audio-related errors (only pre-existing errors in examples/mini-services)
+- Ran ESLint audit: 0 audio-related errors
+- Ran comprehensive API test suite (12 tests):
+  1. GET /api/audio-library → 200 ✅
+  2. POST create audio → 201 ✅
+  3. POST create second audio → 201 ✅
+  4. GET all (count verification) → 200 ✅
+  5. GET ?category=departure (filter) → 200 ✅
+  6. PUT update audio → 200 ✅
+  7. GET single by ID → 200 ✅
+  8. DELETE audio → 200 ✅
+  9. GET after delete (count verification) → 200 ✅
+  10. POST invalid URL → 400 ✅
+  11. POST duplicate slug → 409 ✅
+  12. GET without auth → 401 ✅
+- Verified UI compilation: page.tsx compiles HTTP 200, no errors in dev log
+
+Stage Summary:
+- All 7 audio-related files confirmed working
+- 12/12 API tests passed
+- UI compiles without errors
+- Ready for GitHub push

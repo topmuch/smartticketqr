@@ -13,6 +13,7 @@ import {
   Activity,
   CheckCircle2,
   Save,
+  Volume2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,8 @@ import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import RoleGate from '@/components/smart-ticket/role-gate';
+import AudioSettingsSection from '@/components/smart-ticket/audio-settings-section';
+import { useOrgStore } from '@/store/org-store';
 
 interface SettingSection {
   id: string;
@@ -42,11 +45,13 @@ const settingSections: SettingSection[] = [
   { id: 'security', title: 'Security', description: 'Security settings', icon: Shield },
   { id: 'data', title: 'Data Management', description: 'Export & backup', icon: Database },
   { id: 'api', title: 'API Keys', description: 'Integration keys', icon: Key },
+  { id: 'audio', title: 'Audio', description: 'Audio announcements', icon: Volume2 },
 ];
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('general');
   const { user } = useAuthStore();
+  const { currentOrganization } = useOrgStore();
   const { theme, setTheme } = useTheme();
   const [companyName, setCompanyName] = useState('SmartTicketQR');
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -569,6 +574,11 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Audio Settings */}
+          {activeSection === 'audio' && currentOrganization?.id && (
+            <AudioSettingsSection organizationId={currentOrganization.id} />
           )}
 
           {/* Save Button */}
