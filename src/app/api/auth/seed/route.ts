@@ -294,6 +294,7 @@ export async function POST(request: NextRequest) {
       holderPhone: string;
       seatNumber: string | undefined;
       price: number;
+      basePrice: number;
       currency: string;
       status: string;
       validatedAt?: Date;
@@ -316,6 +317,8 @@ export async function POST(request: NextRequest) {
 
         const priceMultiplier = ticketType === 'VIP' ? 2 : ticketType === 'Economy' ? 0.7 : 1;
 
+        const price = Math.round(event.price * priceMultiplier * 100) / 100;
+
         ticketsToCreate.push({
           eventId: event.id,
           userId: users[i % 3].id,
@@ -325,7 +328,8 @@ export async function POST(request: NextRequest) {
           holderEmail,
           holderPhone: `+221 7${Math.floor(1000000 + Math.random() * 9000000)}`,
           seatNumber: event.type === 'event' ? undefined : `${String.fromCharCode(65 + Math.floor(i / 5))}${(i % 5) + 1}`,
-          price: Math.round(event.price * priceMultiplier * 100) / 100,
+          price,
+          basePrice: price,
           currency: event.currency,
           status,
           validatedAt: status === 'used' ? new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000) : undefined,

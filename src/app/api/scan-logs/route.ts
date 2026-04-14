@@ -70,9 +70,9 @@ export async function GET(request: NextRequest) {
         : [],
     ]);
 
-    const ticketMap = new Map(tickets.map((t) => [t.id, t]));
-    const eventMap = new Map(events.map((e) => [e.id, e]));
-    const operatorMap = new Map(operators.map((o) => [o.id, o.name]));
+    const ticketMap = new Map(tickets.map((t) => [t.id, t] as [string, typeof t]));
+    const eventMap = new Map(events.map((e) => [e.id, e] as [string, typeof e]));
+    const operatorMap = new Map(operators.map((o) => [o.id, o.name] as [string, string]));
 
     const enrichedData = data.map((log) => ({
       id: log.id,

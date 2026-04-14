@@ -108,6 +108,7 @@ model Organization {
   fareTypes         FareType[]
   ticketExtras      TicketExtra[]
   promoCodes        PromoCode[]
+  tickets           Ticket[]
 
   @@index([slug])
   @@index([subscriptionStatus])
@@ -239,6 +240,7 @@ model User {
   transactions  Transaction[]
   auditLogs      AuditLog[]
   supportTickets SupportTicket[]
+  affiliates     Affiliate[]
 
   @@unique([email, organizationId])
   @@index([role])
@@ -309,6 +311,7 @@ model Ticket {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  organizationId String?                                  // Denormalized org ref for direct queries
   fareTypeId      String?                                  // Fare type (student, child, senior, etc.)
   promoCodeId     String?                                  // Applied promo code
   basePrice       Float                                   // Original price before modifiers
@@ -322,6 +325,7 @@ model Ticket {
 
   event        Event         @relation(fields: [eventId], references: [id])
   user         User?         @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
   fareType     FareType?     @relation(fields: [fareTypeId], references: [id])
   promoCode    PromoCode?    @relation(fields: [promoCodeId], references: [id])
   ticketItems  TicketItem[]
@@ -332,6 +336,7 @@ model Ticket {
   @@index([ticketCode])
   @@index([status])
   @@index([holderEmail])
+  @@index([organizationId])
   @@index([fareTypeId])
   @@index([promoCodeId])
 }
@@ -733,6 +738,7 @@ model Affiliate {
   updatedAt            DateTime @updatedAt
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
 
   @@index([organizationId])
   @@index([code])

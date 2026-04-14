@@ -200,7 +200,7 @@ export function tenantWhereWith(
 // ERROR HANDLER (sanitized for production)
 // ============================================================
 
-export async function withErrorHandler(fn: () => Promise<NextResponse>): Promise<NextResponse> {
+export async function withErrorHandler(fn: () => Promise<NextResponse | Response>): Promise<NextResponse | Response> {
   try {
     return await fn();
   } catch (error) {

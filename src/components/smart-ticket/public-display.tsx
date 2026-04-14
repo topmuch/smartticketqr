@@ -187,7 +187,7 @@ function ScheduleRow({
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
         style={{ backgroundColor: entry.lineColor + '25' }}
       >
-        <VehicleIcon type={entry.vehicleType} className="h-6 w-6" style={{ color: entry.lineColor }} as any />
+        <span style={{ color: entry.lineColor }}><VehicleIcon type={entry.vehicleType} className="h-6 w-6" /></span>
       </div>
 
       {/* Line info */}

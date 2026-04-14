@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
 
       case 'escpos':
       default: {
-        return new Response(escposBuffer, {
+        return new Response(Buffer.from(escposBuffer), {
           headers: {
             'Content-Type': 'application/octet-stream',
             'Content-Disposition': `attachment; filename="ticket-${ticket.ticketCode}.bin"`,

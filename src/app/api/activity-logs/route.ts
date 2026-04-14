@@ -25,12 +25,12 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get('action');
     const { startDate, endDate } = parseDateRange(searchParams);
 
-    const where = tenantWhereWith(tenant.organizationId, {});
+    const where: Record<string, unknown> = tenantWhereWith(tenant.organizationId, {});
 
-    if (userId) (where as Record<string, unknown>).userId = userId;
-    if (action) (where as Record<string, unknown>).action = action;
+    if (userId) where.userId = userId;
+    if (action) where.action = action;
     if (startDate || endDate) {
-      (where as Record<string, unknown>).createdAt = {} as Record<string, Date>;
+      where.createdAt = {};
       if (startDate) (where.createdAt as Record<string, Date>).gte = startDate;
       if (endDate) (where.createdAt as Record<string, Date>).lte = endDate;
     }

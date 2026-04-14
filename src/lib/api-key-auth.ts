@@ -380,7 +380,7 @@ export async function rotateApiKey(
  */
 export async function resolveApiKey(
   request: NextRequest
-): Promise<ApiKeyContext | NextResponse> {
+): Promise<ResolvedApiKeyContext | NextResponse> {
   // Step 1: Get raw key from header
   const rawKey = request.headers.get('x-api-key');
   if (!rawKey) {

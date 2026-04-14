@@ -604,11 +604,6 @@ export async function getAutomationLogs(
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
-      include: {
-        organization: {
-          select: { name: true },
-        },
-      },
     }),
     db.automationLog.count({ where }),
   ]);
@@ -653,11 +648,6 @@ export async function processPendingQueue(): Promise<{
       },
       orderBy: { createdAt: 'asc' },
       take: 50, // Process in batches
-      include: {
-        organization: {
-          select: { settings: true },
-        },
-      },
     });
 
     for (const log of pendingLogs) {

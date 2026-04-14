@@ -331,14 +331,14 @@ export default function BillingPage() {
         const rawPlans = Array.isArray(json) ? json : (json.plans || json.data || PLANS);
         if (!Array.isArray(rawPlans)) return PLANS;
         return rawPlans.map((p: Record<string, unknown>) => ({
-          id: p.code || p.id || '',
-          name: p.name || '',
-          price: p.priceMonthly ?? p.price ?? 0,
-          eventsLimit: p.maxEvents ?? p.eventsLimit ?? 0,
-          ticketsPerEvent: p.maxTicketsPerEvent ?? p.ticketsPerEvent ?? 0,
-          usersLimit: p.maxUsers ?? p.usersLimit ?? 0,
+          id: String(p.code || p.id || ''),
+          name: String(p.name || ''),
+          price: Number(p.priceMonthly ?? p.price ?? 0),
+          eventsLimit: Number(p.maxEvents ?? p.eventsLimit ?? 0),
+          ticketsPerEvent: Number(p.maxTicketsPerEvent ?? p.ticketsPerEvent ?? 0),
+          usersLimit: Number(p.maxUsers ?? p.usersLimit ?? 0),
           features: Array.isArray(p.features) ? p.features : [],
-        }));
+        })) as SubscriptionPlan[];
       } catch {
         return PLANS;
       }

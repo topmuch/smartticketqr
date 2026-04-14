@@ -12,7 +12,7 @@
 // - ScanLog creation (Phase 3 audit trail)
 // ============================================================
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { resolveTenant, isErrorResponse, corsResponse, withErrorHandler, handleCors, requirePermission } from '@/lib/api-helper';
 import { validateQRPayload, validateTicketCode } from '@/lib/ticket-generator';

@@ -296,7 +296,7 @@ function NextDepartureCard({ entry, t }: { entry: BoardEntry; t: any }) {
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
             style={{ backgroundColor: entry.lineColor + '15' }}
           >
-            <VehicleIcon type={entry.vehicleType} className="h-6 w-6" style={{ color: entry.lineColor } as any} />
+            <span style={{ color: entry.lineColor }}><VehicleIcon type={entry.vehicleType} className="h-6 w-6" /></span>
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -415,7 +415,7 @@ function BoardTable({
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
                       style={{ backgroundColor: entry.lineColor + '15' }}
                     >
-                      <VehicleIcon type={entry.vehicleType} className="h-4 w-4" style={{ color: entry.lineColor } as any} />
+                      <span style={{ color: entry.lineColor }}><VehicleIcon type={entry.vehicleType} className="h-4 w-4" /></span>
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold truncate">{entry.lineName}</div>
@@ -546,7 +546,7 @@ function MobileCardList({
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
                   style={{ backgroundColor: entry.lineColor + '15' }}
                 >
-                  <VehicleIcon type={entry.vehicleType} className="h-4 w-4" style={{ color: entry.lineColor } as any} />
+                  <span style={{ color: entry.lineColor }}><VehicleIcon type={entry.vehicleType} className="h-4 w-4" /></span>
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-bold truncate">{entry.lineName}</div>

@@ -231,8 +231,10 @@ export async function POST(request: NextRequest) {
         holderPhone: holderPhone || null,
         seatNumber: seatNumber || null,
         price: event.price, // Auto-assign from event
+        basePrice: event.price,
         currency: event.currency,
         status: 'active',
+        issuedAt: new Date(),
         expiresAt: event.endDate,
       },
       include: {

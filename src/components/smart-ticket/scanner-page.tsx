@@ -1289,7 +1289,7 @@ export default function ScannerPage() {
                                     <span className="text-xs text-muted-foreground shrink-0">×{extra.quantity}</span>
                                   )}
                                   <span className="text-xs font-mono font-medium shrink-0">
-                                    {extra.subtotal.toLocaleString()} {scanResult.ticket.currency}
+                                    {extra.subtotal.toLocaleString()} {scanResult.ticket?.currency ?? ''}
                                   </span>
                                 </div>
                               ))}

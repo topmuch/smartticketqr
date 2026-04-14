@@ -7,6 +7,15 @@
 
 import { EscPosBuilder, createReceipt } from '@/lib/escpos-commands';
 
+// ---- Web Serial API type stubs (not always in tsconfig lib) ----
+
+interface SerialPort {
+  open(options: { baudRate: number }): Promise<void>;
+  readable: ReadableStream<Uint8Array> | null;
+  writable: WritableStream<Uint8Array> | null;
+  close(): Promise<void>;
+}
+
 // ---- Type Aliases ----
 
 export type PrinterType = 'bluetooth' | 'serial' | 'usb' | 'unknown';
@@ -239,13 +248,13 @@ export class BluetoothPrinter {
       });
 
       // Connect to GATT server
-      this.server = await this.device.gatt.connect();
+      this.server = await this.device.gatt!.connect();
 
       // Get the print service
-      this.service = await this.server.getPrimaryService(BLE_SERVICE_UUID);
+      this.service = await this.server!.getPrimaryService(BLE_SERVICE_UUID);
 
       // Get the write characteristic
-      this.characteristic = await this.service.getCharacteristic(
+      this.characteristic = await this.service!.getCharacteristic(
         BLE_CHARACTERISTIC_UUID,
       );
     } catch (err: unknown) {
@@ -262,9 +271,9 @@ export class BluetoothPrinter {
           this.device.addEventListener('gattserverdisconnected', () => {
             this.cleanup();
           });
-          this.server = await this.device.gatt.connect();
-          this.service = await this.server.getPrimaryService(BLE_SERVICE_UUID);
-          this.characteristic = await this.service.getCharacteristic(
+          this.server = await this.device.gatt!.connect();
+          this.service = await this.server!.getPrimaryService(BLE_SERVICE_UUID);
+          this.characteristic = await this.service!.getCharacteristic(
             BLE_CHARACTERISTIC_UUID,
           );
           return;

@@ -104,6 +104,17 @@ const SCHEDULE_STATUS_CONFIG: Record<ScheduleStatus, { label: string; icon: Reac
   cancelled: { label: 'Annulé', icon: XCircle, className: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' },
 };
 
+function renderStatusBadge(status: ScheduleStatus) {
+  const config = SCHEDULE_STATUS_CONFIG[status];
+  const Icon = config.icon;
+  return (
+    <Badge variant="secondary" className={`text-[10px] gap-1 ${config.className}`}>
+      <Icon className="size-3" />
+      {config.label}
+    </Badge>
+  );
+}
+
 const DEFAULT_LINE_FORM = {
   name: '',
   origin: '',
@@ -155,8 +166,7 @@ function drawQRCode(
   fgColor: string,
   bgColor: string
 ) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
+  const ctx = canvas.getContext('2d')!;
 
   canvas.width = size;
   canvas.height = size;
@@ -645,17 +655,6 @@ export default function DisplayPage() {
     const v = getVehicleIcon(type);
     const Icon = v.icon;
     return <Icon className={className || 'h-5 w-5'} />;
-  }
-
-  function renderStatusBadge(status: ScheduleStatus) {
-    const config = SCHEDULE_STATUS_CONFIG[status];
-    const Icon = config.icon;
-    return (
-      <Badge variant="secondary" className={`text-[10px] gap-1 ${config.className}`}>
-        <Icon className="size-3" />
-        {config.label}
-      </Badge>
-    );
   }
 
   function getDepartures(schedules: Schedule[]) {

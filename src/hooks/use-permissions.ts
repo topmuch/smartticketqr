@@ -13,6 +13,8 @@ import {
   type ClientRole,
 } from '@/lib/permissions';
 
+export type { Permission, ClientRole };
+
 /**
  * Hook for checking RBAC permissions on the client side.
  * Uses the current user's role from the auth store.

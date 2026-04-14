@@ -526,7 +526,7 @@ export async function getAffiliateDashboard(organizationId: string): Promise<Aff
     take: 10,
   });
 
-  const recentReferrals = [];
+  const recentReferrals: Array<{ id: string; code: string; affiliateName: string; revenue: number; commission: number; createdAt: Date }> = [];
   for (const log of recentReferralLogs) {
     try {
       const details = JSON.parse(log.details || '{}');
@@ -536,7 +536,7 @@ export async function getAffiliateDashboard(organizationId: string): Promise<Aff
         id: log.id,
         code: details.referralCode ?? 'N/A',
         affiliateName: affiliate?.user?.name ?? 'Unknown',
-        revenue: details.revenue ?? 0,
+        revenue: Number(details.revenue ?? 0),
         commission: affiliate
           ? Math.round((details.revenue ?? 0) * affiliate.commissionRate / 100 * 100) / 100
           : 0,

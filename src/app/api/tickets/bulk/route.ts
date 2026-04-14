@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
       holderPhone?: string;
       seatNumber?: string;
       price: number;
+      basePrice: number;
+      issuedAt: Date;
       currency: string;
       status: string;
       expiresAt: Date;
@@ -53,8 +55,10 @@ export async function POST(request: NextRequest) {
           holderName: `Attendee ${ticketNum}`,
           holderEmail: `attendee${ticketNum}@bulk.generate`,
           price: event.price,
+          basePrice: event.price,
           currency: event.currency,
           status: 'active',
+          issuedAt: new Date(),
           expiresAt: event.endDate,
         });
       }
@@ -70,8 +74,10 @@ export async function POST(request: NextRequest) {
           holderPhone: t.holderPhone,
           seatNumber: t.seatNumber,
           price: parseFloat(t.price) || event.price,
+          basePrice: parseFloat(t.price) || event.price,
           currency: t.currency || event.currency,
           status: 'active',
+          issuedAt: new Date(),
           expiresAt: event.endDate,
         });
       }

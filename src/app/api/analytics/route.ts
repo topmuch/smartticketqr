@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Fetch event names for revenue by event
-    const eventIds = revenueByEvent.map(r => r.eventId).filter(Boolean);
+    const eventIds = revenueByEvent.map(r => r.eventId).filter((id): id is string => Boolean(id));
     const events = eventIds.length > 0
       ? await db.event.findMany({
           where: { id: { in: eventIds } },
