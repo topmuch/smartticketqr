@@ -126,7 +126,7 @@ export default function UsersPage() {
     name: '',
     email: '',
     password: '',
-    role: 'operator' as string,
+    role: 'caisse' as string,
   });
   const queryClient = useQueryClient();
 
@@ -234,7 +234,7 @@ export default function UsersPage() {
   });
 
   const resetForm = () => {
-    setFormData({ name: '', email: '', password: '', role: 'operator' });
+    setFormData({ name: '', email: '', password: '', role: 'caisse' });
   };
 
   const handleOpenCreate = () => {

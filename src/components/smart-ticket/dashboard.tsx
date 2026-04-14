@@ -336,7 +336,7 @@ export default function Dashboard() {
   });
 
   // ── Role Detection ───────────────────────────────────────────
-  const userRole = user?.role || 'operator';
+  const userRole = user?.role || 'caisse';
   const roleInfo = getRoleConfig(userRole);
   const isCaisse = userRole === 'caisse';
   const isComptable = userRole === 'comptable';

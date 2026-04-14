@@ -84,8 +84,8 @@ export async function POST(request: NextRequest) {
 
     // Validate role is allowed
     const allowedRoles = tenant.role === 'super_admin'
-      ? ['super_admin', 'admin', 'caisse', 'controleur', 'comptable', 'operator']
-      : ['admin', 'caisse', 'controleur', 'comptable', 'operator'];
+      ? ['super_admin', 'admin', 'caisse', 'controleur', 'comptable']
+      : ['admin', 'caisse', 'controleur', 'comptable'];
     if (role && !allowedRoles.includes(role)) {
       return corsResponse({ error: `Invalid role. Allowed: ${allowedRoles.join(', ')}` }, 400);
     }
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         name,
         email,
         password: hashedPassword,
-        role: role || 'operator',
+        role: role || 'caisse',
         organizationId: tenant.organizationId,
       },
       select: {

@@ -19,7 +19,7 @@ import {
  */
 export function usePermissions() {
   const user = useAuthStore((s) => s.user);
-  const role = user?.role || 'operator';
+  const role = user?.role || 'caisse';
 
   return {
     role,
@@ -56,7 +56,7 @@ export function usePermissions() {
  */
 export function useCan(permission: Permission): boolean {
   const user = useAuthStore((s) => s.user);
-  const role = user?.role || 'operator';
+  const role = user?.role || 'caisse';
   return checkPermission(role, permission);
 }
 
@@ -65,6 +65,6 @@ export function useCan(permission: Permission): boolean {
  */
 export function useCanAny(permissions: Permission[]): boolean {
   const user = useAuthStore((s) => s.user);
-  const role = user?.role || 'operator';
+  const role = user?.role || 'caisse';
   return checkAnyPermission(role, permissions);
 }

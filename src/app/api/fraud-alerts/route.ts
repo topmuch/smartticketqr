@@ -84,8 +84,8 @@ export async function GET(request: NextRequest) {
 // ============================================================
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
-    // Only admin, super_admin, and operator can create fraud alerts
-    const tenant = requireTenantRole(request, 'admin', 'super_admin', 'operator');
+    // Only admin and super_admin can create fraud alerts
+    const tenant = requireTenantRole(request, 'admin', 'super_admin');
     if (isErrorResponse(tenant)) return tenant;
 
     const body = await request.json();

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const tenant = resolveTenant(request);
     if (isErrorResponse(tenant)) return tenant;
 
-    const roleCheck = requireTenantRole(request, 'super_admin', 'admin', 'operator');
+    const roleCheck = requireTenantRole(request, 'super_admin', 'admin', 'controleur');
     if (isErrorResponse(roleCheck)) return roleCheck;
 
     const { searchParams } = new URL(request.url);

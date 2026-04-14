@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      userRole = role || 'operator';
+      userRole = role || 'caisse';
     }
 
     // Check if user already exists in THIS organization

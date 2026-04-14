@@ -217,7 +217,7 @@ function Sidebar() {
   const { theme, setTheme } = useTheme();
   const [mounted] = useState(true);
 
-  const userRole = user?.role || 'operator';
+  const userRole = user?.role || 'caisse';
   const isSuperAdmin = userRole === 'super_admin';
 
   // Build navigation based on role
@@ -561,7 +561,7 @@ function Header() {
   const { currentPage, setSidebarOpen } = useAppStore();
   const { user } = useAuthStore();
 
-  const userRole = user?.role || 'operator';
+  const userRole = user?.role || 'caisse';
   const roleInfo = getRoleConfig(userRole);
   const pageTitle = getPageLabel(currentPage, userRole);
 
