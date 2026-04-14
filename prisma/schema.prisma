@@ -815,3 +815,28 @@ model LineSchedule {
   @@index([type])
   @@index([time])
 }
+
+// ============================================================
+// 🔊 AUDIO LIBRARY (centralized audio announcements)
+// ============================================================
+// Super Admin manages audio files (MP3 links). Clients select
+// which audio to play on their public displays (departures, etc.)
+// ============================================================
+model AudioLibrary {
+  id              String   @id @default(cuid())
+  slug            String   @unique                         // 'boarding-call-fr', 'welcome-senegal'
+  name            String                                    // "Appel embarquement - FR"
+  audioUrl        String                                    // Direct MP3 URL (Google Drive, S3, etc.)
+  category        String   @default("alert")               // departure, arrival, alert, welcome, safety
+  language        String   @default("fr")                  // fr, en, pt, es, wo
+  isGlobal        Boolean  @default(false)                 // TRUE = visible to ALL clients
+  isActive        Boolean  @default(true)
+  durationSeconds Int?                                     // Cached duration (optional)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category])
+  @@index([isGlobal])
+  @@index([isActive])
+  @@index([language])
+}

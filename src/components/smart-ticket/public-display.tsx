@@ -14,7 +14,10 @@ import {
   Loader2,
   RefreshCw,
   QrCode,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
+import { useAudioPlayer } from '@/hooks/use-audio-player';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,6 +42,15 @@ interface BoardData {
   };
   departures: ScheduleEntry[];
   arrivals: ScheduleEntry[];
+  audioSettings?: Record<string, string | undefined>;
+  audioLibrary?: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    audioUrl: string;
+    category: string;
+    language: string;
+  }>;
   updatedAt: string;
 }
 
@@ -474,6 +486,42 @@ export default function PublicDisplay({ boardSlug }: { boardSlug: string }) {
     [data]
   );
 
+  // ── Audio Player Integration ─────────────────────────────────────────────
+  const departureAudioUrl = useMemo(() => {
+    const audioSettings = data?.audioSettings;
+    const audioLibrary = data?.audioLibrary || [];
+    if (!audioSettings?.departureSlug) return undefined;
+    const audio = audioLibrary.find((a) => a.slug === audioSettings.departureSlug);
+    return audio?.audioUrl;
+  }, [data?.audioSettings, data?.audioLibrary]);
+
+  const { isEnabled: audioEnabled, volume: audioVolume, setVolume: setAudioVolume, announce } = useAudioPlayer({
+    audioUrl: departureAudioUrl,
+    triggerMinutes: 5,
+  });
+
+  // Check departures for audio announcements every 30 seconds
+  useEffect(() => {
+    if (!departureAudioUrl || !audioEnabled) return;
+
+    const checkInterval = setInterval(() => {
+      departures.forEach((entry) => {
+        announce(entry);
+      });
+    }, 30_000);
+
+    // Also check immediately on data change
+    departures.forEach((entry) => {
+      announce(entry);
+    });
+
+    return () => clearInterval(checkInterval);
+  }, [departures, departureAudioUrl, audioEnabled, announce]);
+
+  const handleToggleVolume = useCallback(() => {
+    setAudioVolume(audioVolume > 0 ? 0 : 0.8);
+  }, [audioVolume, setAudioVolume]);
+
   // ── Loading state ──────────────────────────────────────────────────────
   if (isInitialLoading) {
     return (
@@ -555,6 +603,21 @@ export default function PublicDisplay({ boardSlug }: { boardSlug: string }) {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Volume control */}
+            {departureAudioUrl && (
+              <button
+                onClick={handleToggleVolume}
+                className="flex items-center justify-center rounded-full p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title={audioEnabled ? 'Mute' : 'Unmute'}
+              >
+                {audioVolume > 0 ? (
+                  <Volume2 className="h-5 w-5" />
+                ) : (
+                  <VolumeX className="h-5 w-5" />
+                )}
+              </button>
+            )}
+
             {/* Live indicator */}
             <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />

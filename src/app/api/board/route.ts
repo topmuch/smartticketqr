@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
         name: true,
         primaryColor: true,
         logoUrl: true,
+        settings: true,
       },
     });
 
@@ -178,6 +179,20 @@ export async function GET(request: NextRequest) {
     const finalDepartures = parsedLimit ? departures.slice(0, parsedLimit) : departures;
     const finalArrivals = parsedLimit ? arrivals.slice(0, parsedLimit) : arrivals;
 
+    // Parse organization settings for audio configuration
+    let audioSettings: Record<string, string | undefined> = {};
+    try {
+      const parsedSettings = JSON.parse(organization.settings || '{}');
+      audioSettings = parsedSettings.audio || {};
+    } catch {
+      // Invalid JSON in settings — use empty defaults
+    }
+
+    // Fetch global active audio library
+    const audioLibrary = await db.audioLibrary.findMany({
+      where: { isGlobal: true, isActive: true },
+    });
+
     return corsResponse({
       organization: {
         name: organization.name,
@@ -195,6 +210,8 @@ export async function GET(request: NextRequest) {
       })),
       departures: finalDepartures,
       arrivals: finalArrivals,
+      audioSettings,
+      audioLibrary,
       updatedAt: new Date().toISOString(),
     });
   });

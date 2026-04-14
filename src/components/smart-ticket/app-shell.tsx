@@ -34,6 +34,7 @@ import {
   Monitor,
   MessageSquare,
   Tags,
+  Volume2,
   type LucideIcon,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -143,6 +144,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { id: 'custom-domains', label: 'Custom Domains', icon: Globe, scope: 'super_admin' },
       { id: 'automation', label: 'Automation', icon: Zap, scope: 'super_admin' },
       { id: 'display', label: 'Dynamic Display', icon: Monitor, scope: 'super_admin' },
+      { id: 'audio-library', label: 'Audio Library', icon: Volume2, scope: 'super_admin' },
     ],
   },
   {
