@@ -42,6 +42,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useAuthStore } from '@/store/auth-store';
 import { useOrgStore } from '@/store/org-store';
+import { CameraScanner } from '@/components/smart-ticket/camera-scanner';
+import {
+  syncTicketsFromServer,
+  getLocalTicket,
+  updateLocalTicketStatus,
+  queueScan,
+  getPendingScanCount,
+  flushScanQueue,
+  initOfflineAutoSync,
+  getLocalTicketCount,
+} from '@/lib/offline-db';
 
 // ============================================================
 // Types
@@ -170,109 +181,13 @@ function getApiHeaders() {
 }
 
 // ============================================================
-// IndexedDB Helpers (Offline Queue)
+// Offline DB helpers (delegated to lib/offline-db.ts via idb)
 // ============================================================
+// The old raw IndexedDB code has been replaced by:
+//   syncTicketsFromServer, getLocalTicket, queueScan,
+//   flushScanQueue, getPendingScanCount, initOfflineAutoSync
+// See src/lib/offline-db.ts for the full implementation.
 
-const DB_NAME = 'smartticket-offline';
-const DB_VERSION = 1;
-const STORE_NAME = 'scan-queue';
-
-function openDB(): Promise<IDBDatabase | null> {
-  return new Promise((resolve) => {
-    try {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: 'ticketCode' });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => {
-        console.warn('[IndexedDB] Failed to open database');
-        resolve(null);
-      };
-    } catch {
-      console.warn('[IndexedDB] Not available (private browsing?)');
-      resolve(null);
-    }
-  });
-}
-
-async function addToOfflineQueue(item: OfflineQueueItem): Promise<void> {
-  try {
-    const db = await openDB();
-    if (!db) return;
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    store.put(item);
-    tx.oncomplete = () => db.close();
-    tx.onerror = () => {
-      console.warn('[IndexedDB] Failed to add item to queue');
-      db.close();
-    };
-  } catch {
-    // Graceful degradation — IndexedDB not available
-  }
-}
-
-async function getOfflineQueue(): Promise<OfflineQueueItem[]> {
-  try {
-    const db = await openDB();
-    if (!db) return [];
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const request = store.getAll();
-      request.onsuccess = () => {
-        const items = request.result as OfflineQueueItem[];
-        db.close();
-        resolve(items);
-      };
-      request.onerror = () => {
-        db.close();
-        resolve([]);
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-async function clearOfflineQueue(): Promise<void> {
-  try {
-    const db = await openDB();
-    if (!db) return;
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).clear();
-    tx.oncomplete = () => db.close();
-    tx.onerror = () => db.close();
-  } catch {
-    // Graceful degradation
-  }
-}
-
-async function syncOfflineQueue(): Promise<void> {
-  const queue = await getOfflineQueue();
-  const unsynced = queue.filter((item) => !item.synced);
-  if (unsynced.length === 0) return;
-
-  try {
-    const res = await fetch('/api/offline-sync', {
-      method: 'POST',
-      headers: getApiHeaders(),
-      body: JSON.stringify({ scans: unsynced }),
-    });
-    if (res.ok) {
-      await clearOfflineQueue();
-      toast.success(`Synced ${unsynced.length} offline scan(s)`);
-    } else {
-      toast.error('Offline sync failed — will retry when back online');
-    }
-  } catch {
-    toast.error('Offline sync failed — will retry when back online');
-  }
-}
 
 // ============================================================
 // Geolocation Helper
@@ -326,15 +241,18 @@ export default function ScannerPage() {
   const [ticketCode, setTicketCode] = useState('');
   const [scanResult, setScanResult] = useState<ValidateResponse | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [showViewfinder, setShowViewfinder] = useState(false);
   const [flashColor, setFlashColor] = useState<'green' | 'red' | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
   const [syncQueueCount, setSyncQueueCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [scannerStarted, setScannerStarted] = useState(false);
+  const [localTicketCount, setLocalTicketCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scanCooldownRef = useRef(false);
   const successAudioRef = useRef<HTMLAudioElement | null>(null);
   const errorAudioRef = useRef<HTMLAudioElement | null>(null);
   const queryClient = useQueryClient();
@@ -349,7 +267,7 @@ export default function ScannerPage() {
     const handleOnline = () => {
       setIsOnline(true);
       toast.success('Back online — syncing queued scans...');
-      syncOfflineQueue().then(() => refreshSyncQueueCount());
+      flushScanQueue(useAuthStore.getState().token || '').then(() => refreshSyncQueueCount());
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -366,12 +284,34 @@ export default function ScannerPage() {
   }, []);
 
   // ============================================================
+  // Offline Auto-Sync (via lib/offline-db.ts)
+  // ============================================================
+
+  useEffect(() => {
+    const cleanup = initOfflineAutoSync(() => useAuthStore.getState().token);
+    return cleanup;
+  }, []);
+
+  // Listen for offline-sync custom events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.synced > 0) {
+        toast.success(`Auto-synced ${detail.synced} scan(s)`);
+        refreshSyncQueueCount();
+      }
+    };
+    window.addEventListener('offline-sync', handler);
+    return () => window.removeEventListener('offline-sync', handler);
+  }, []);
+
+  // ============================================================
   // Sync Queue Count Polling
   // ============================================================
 
   const refreshSyncQueueCount = useCallback(async () => {
-    const queue = await getOfflineQueue();
-    setSyncQueueCount(queue.filter((item) => !item.synced).length);
+    const count = await getPendingScanCount();
+    setSyncQueueCount(count);
   }, []);
 
   useEffect(() => {
@@ -379,6 +319,16 @@ export default function ScannerPage() {
     const interval = setInterval(refreshSyncQueueCount, 5000);
     return () => clearInterval(interval);
   }, [refreshSyncQueueCount]);
+
+  // ============================================================
+  // Local Ticket Cache Count
+  // ============================================================
+
+  useEffect(() => {
+    const orgId = useOrgStore.getState().currentOrganization?.id;
+    if (!orgId) return;
+    getLocalTicketCount(orgId).then(setLocalTicketCount).catch(() => {});
+  }, [scanResult, isOnline]);
 
   // ============================================================
   // Today's Scan Count
@@ -518,7 +468,136 @@ export default function ScannerPage() {
   });
 
   // ============================================================
-  // Scan Handler
+  // Offline-First Scan Handler
+  // ============================================================
+  // When offline: validates against local IndexedDB cache first.
+  // Always queues the scan for server-side double-check.
+
+  const processScan = useCallback(async (code: string) => {
+    if (!code.trim() || scanCooldownRef.current) return;
+
+    const cleanCode = code.trim().toUpperCase();
+    initAudio();
+    setScannerStarted(true);
+    setIsScanning(true);
+    scanCooldownRef.current = true;
+    setTimeout(() => { scanCooldownRef.current = false; }, 2000); // 2s cooldown
+
+    try {
+      const geo = await getGeolocation();
+
+      if (!navigator.onLine) {
+        // ── OFFLINE: Validate against local IndexedDB cache ──
+        const localTicket = await getLocalTicket(cleanCode);
+
+        if (localTicket && localTicket.status === 'active') {
+          // Valid locally → mark in cache + queue for server
+          const newUsage = (localTicket.usageCount || 0) + 1;
+          const isFinalScan = newUsage >= (localTicket.maxScans || 1);
+          await updateLocalTicketStatus(
+            cleanCode,
+            isFinalScan ? 'used' : 'active',
+            newUsage
+          );
+          await queueScan({
+            ticketCode: cleanCode,
+            scannedAt: new Date().toISOString(),
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+          });
+          await refreshSyncQueueCount();
+
+          setScanResult({
+            success: true,
+            status: 'valid',
+            sound_hint: 'success',
+            message: `Validated offline — ${localTicket.holderName} (${localTicket.eventName})`,
+            geo: null,
+            ticket: {
+              id: localTicket.id,
+              ticketCode: localTicket.ticketCode,
+              ticketType: localTicket.ticketType,
+              holderName: localTicket.holderName,
+              price: localTicket.price,
+              currency: localTicket.currency,
+              event: {
+                name: localTicket.eventName,
+                type: localTicket.eventType,
+                location: localTicket.eventLocation || undefined,
+                startDate: localTicket.eventStartDate,
+              },
+            },
+          });
+          setFlashColor('green');
+          playSound('success');
+          vibrateSuccess();
+          setScanCount((p) => p + 1);
+          toast.success('Ticket validated offline', {
+            description: `${localTicket.holderName} — will sync to server`,
+          });
+        } else if (localTicket && localTicket.status === 'used') {
+          setScanResult({
+            success: false,
+            status: 'used',
+            sound_hint: 'error',
+            message: 'Ticket already used (offline)',
+            geo: null,
+            ticket: {
+              id: localTicket.id,
+              ticketCode: localTicket.ticketCode,
+              ticketType: localTicket.ticketType,
+              holderName: localTicket.holderName,
+              event: { name: localTicket.eventName },
+            },
+          });
+          setFlashColor('red');
+          playSound('error');
+          vibrateError();
+          toast.warning('Already used', { description: localTicket.holderName });
+        } else {
+          // Not in local cache — queue for later
+          await queueScan({
+            ticketCode: cleanCode,
+            scannedAt: new Date().toISOString(),
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+          });
+          await refreshSyncQueueCount();
+          setScanResult({
+            success: false,
+            status: 'invalid',
+            sound_hint: 'error',
+            message: 'Ticket not found in offline cache — queued for server validation',
+            geo: null,
+            ticket: null,
+          });
+          setFlashColor('red');
+          playSound('error');
+          vibrateError();
+        }
+        setTimeout(() => setFlashColor(null), 1500);
+      } else {
+        // ── ONLINE: Use server validation API ──
+        validateMutation.mutate({ code: cleanCode, lat: geo.latitude, lng: geo.longitude });
+      }
+    } catch {
+      validateMutation.mutate({ code: cleanCode, lat: null, lng: null });
+    } finally {
+      setIsScanning(false);
+    }
+  }, [validateMutation, initAudio, playSound, refreshSyncQueueCount]);
+
+  // ============================================================
+  // Camera Scan Handler (for CameraScanner component)
+  // ============================================================
+
+  const handleCameraScan = useCallback(async (data: string) => {
+    setTicketCode(data); // Show the scanned code in the input
+    await processScan(data);
+  }, [processScan]);
+
+  // ============================================================
+  // Manual Scan Handler
   // ============================================================
 
   const handleScan = useCallback(async () => {
@@ -527,64 +606,8 @@ export default function ScannerPage() {
       toast.error('Please enter a ticket code');
       return;
     }
-
-    // Initialize audio on first scan (user gesture)
-    initAudio();
-    setScannerStarted(true);
-
-    setIsScanning(true);
-
-    try {
-      // Capture geolocation
-      const geo = await getGeolocation();
-
-      // Check online status
-      if (!navigator.onLine) {
-        // Offline: queue the scan in IndexedDB
-        await addToOfflineQueue({
-          ticketCode: code,
-          scannedAt: new Date().toISOString(),
-          latitude: geo.latitude,
-          longitude: geo.longitude,
-          synced: false,
-        });
-        await refreshSyncQueueCount();
-
-        // Show a local result so the scanner doesn't feel broken
-        setScanResult({
-          success: false,
-          status: 'valid',
-          sound_hint: 'success',
-          message: 'Scan queued offline — will sync when connection is restored',
-          geo: null,
-          ticket: {
-            id: 'offline',
-            ticketCode: code,
-            ticketType: 'Queued',
-            holderName: 'Offline Scan',
-            event: {
-              name: 'Pending Sync',
-            },
-          },
-        });
-        setFlashColor('green');
-        playSound('success');
-        vibrateSuccess();
-        setTimeout(() => setFlashColor(null), 1500);
-        toast.success('Scan queued offline', {
-          description: 'Will sync when you are back online',
-        });
-      } else {
-        // Online: call the validation API
-        validateMutation.mutate({ code, lat: geo.latitude, lng: geo.longitude });
-      }
-    } catch {
-      // Fallback: try API call without geo
-      validateMutation.mutate({ code, lat: null, lng: null });
-    } finally {
-      setIsScanning(false);
-    }
-  }, [ticketCode, validateMutation, initAudio, playSound, refreshSyncQueueCount]);
+    await processScan(code);
+  }, [ticketCode, processScan]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -601,8 +624,12 @@ export default function ScannerPage() {
   const handleStartScanner = useCallback(() => {
     initAudio();
     setScannerStarted(true);
-    setShowViewfinder(true);
+    setCameraActive(true);
   }, [initAudio]);
+
+  const handleStopScanner = useCallback(() => {
+    setCameraActive(false);
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -622,14 +649,41 @@ export default function ScannerPage() {
   };
 
   const handleManualSync = useCallback(async () => {
-    if (!navigator.onLine) {
+    const token = useAuthStore.getState().token;
+    if (!token || !navigator.onLine) {
       toast.error('Still offline — cannot sync now');
       return;
     }
     toast.info('Syncing offline scans...');
-    await syncOfflineQueue();
+    const result = await flushScanQueue(token);
     await refreshSyncQueueCount();
+    if (result.synced > 0) {
+      toast.success(`Synced ${result.synced} scan(s) to server`);
+    }
   }, [refreshSyncQueueCount]);
+
+  // ============================================================
+  // Ticket Sync (Download for offline use)
+  // ============================================================
+
+  const handleSyncTickets = useCallback(async () => {
+    const token = useAuthStore.getState().token;
+    const orgId = useOrgStore.getState().currentOrganization?.id;
+    if (!token || !orgId) {
+      toast.error('Authentication required');
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const result = await syncTicketsFromServer(orgId, token);
+      setLocalTicketCount(result.synced);
+      toast.success(`${result.synced} tickets cached for offline use`);
+    } catch (err) {
+      toast.error('Sync failed', { description: err instanceof Error ? err.message : 'Unknown error' });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
 
   // ============================================================
   // Result Helpers
@@ -771,7 +825,7 @@ export default function ScannerPage() {
         {/* Left: Scanner Area */}
         {/* ============================================================ */}
         <div className="space-y-4">
-          {/* Viewfinder Card */}
+          {/* Viewfinder Card — Real Camera */}
           <Card className="overflow-hidden relative">
             <CardContent className="p-0">
               {/* Flash overlay */}
@@ -791,72 +845,60 @@ export default function ScannerPage() {
                 )}
               </AnimatePresence>
 
-              {/* Viewfinder */}
-              <div className="relative aspect-[4/3] bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center overflow-hidden">
-                {showViewfinder ? (
-                  <div className="relative w-full h-full">
-                    {/* Camera simulation background */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-gray-800 via-gray-900 to-black" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Camera className="h-16 w-16 text-gray-600 animate-pulse" />
-                    </div>
-
-                    {/* Scanning corners */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-56 sm:h-56">
-                      {/* Top-left */}
-                      <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-emerald-400 rounded-tl-lg" />
-                      {/* Top-right */}
-                      <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-emerald-400 rounded-tr-lg" />
-                      {/* Bottom-left */}
-                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-emerald-400 rounded-bl-lg" />
-                      {/* Bottom-right */}
-                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-emerald-400 rounded-br-lg" />
-
-                      {/* Animated scanning line */}
-                      <motion.div
-                        className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"
-                        animate={{ top: ['5%', '95%', '5%'] }}
-                        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                      />
-
-                      {/* Center icon */}
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30">
-                        <QrCode className="h-20 w-20 text-emerald-400" />
-                      </div>
-                    </div>
-
-                    {/* Camera overlay text */}
-                    <div className="absolute bottom-4 left-0 right-0 text-center">
-                      <p className="text-emerald-400 text-sm font-medium">Point camera at QR code</p>
-                    </div>
-                  </div>
-                ) : (
+              {cameraActive ? (
+                <CameraScanner
+                  onScan={handleCameraScan}
+                  continuous={true}
+                  scanInterval={1500}
+                  className="rounded-none"
+                />
+              ) : (
+                <div className="relative aspect-[4/3] bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center overflow-hidden">
                   <div className="flex flex-col items-center gap-4 text-gray-400">
                     <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-600 flex items-center justify-center">
                       <QrCode className="h-12 w-12" />
                     </div>
                     <div className="text-center">
                       <p className="text-sm font-medium text-gray-300">Ready to Scan</p>
-                      <p className="text-xs text-gray-500 mt-1">Enter a code below or activate the scanner</p>
+                      <p className="text-xs text-gray-500 mt-1">Enter a code below or activate the camera</p>
                     </div>
                   </div>
-                )}
-
-                {/* Scanner controls overlay */}
-                <div className="absolute bottom-4 right-4 flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
-                    onClick={showViewfinder ? () => setShowViewfinder(false) : handleStartScanner}
-                  >
-                    <Camera className="h-4 w-4 mr-1.5" />
-                    {showViewfinder ? 'Hide' : 'Start Scanner'}
-                  </Button>
+                  {localTicketCount > 0 && (
+                    <div className="absolute top-3 left-3">
+                      <Badge variant="outline" className="text-[10px] gap-1 bg-gray-800/80 border-gray-600 text-gray-300">
+                        <WifiOff className="h-3 w-3" />
+                        {localTicketCount} cached
+                      </Badge>
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* Camera controls */}
+              <div className="absolute bottom-4 right-4 flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+                  onClick={cameraActive ? handleStopScanner : handleStartScanner}
+                >
+                  <Camera className="h-4 w-4 mr-1.5" />
+                  {cameraActive ? 'Stop' : 'Start Scanner'}
+                </Button>
               </div>
             </CardContent>
           </Card>
+
+          {/* Sync Tickets Button (for offline preparation) */}
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={handleSyncTickets}
+            disabled={isSyncing || !isOnline}
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : `Download Tickets for Offline (${localTicketCount} cached)`}
+          </Button>
 
           {/* Manual Input Card */}
           <Card>
