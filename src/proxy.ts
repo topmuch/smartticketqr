@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { jwtVerify } from 'jose';
 
 // ---------------------------------------------------------------------------
 // Supported locales for i18n
@@ -8,11 +9,31 @@ const SUPPORTED_LOCALES = ['fr', 'en', 'pt', 'es'] as const;
 const DEFAULT_LOCALE = 'fr';
 
 // ---------------------------------------------------------------------------
-// Paths that should bypass the middleware entirely (internal Next.js routes)
+// API paths that are PUBLIC (no JWT required)
+// ---------------------------------------------------------------------------
+const PUBLIC_API_PATHS = [
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/forgot-password',
+  '/api/auth/seed',
+  '/api/ticket/public',
+  '/api/v1/',
+  '/api/i18n',           // i18n translations (read-only)
+  '/api/contact',
+  '/api/display/',
+  '/api/board',
+  '/api/subscription-plans',
+];
+
+function isPublicApiPath(pathname: string): boolean {
+  return PUBLIC_API_PATHS.some(p => pathname.startsWith(p));
+}
+
+// ---------------------------------------------------------------------------
+// Paths that should bypass the proxy entirely (internal Next.js routes)
 // ---------------------------------------------------------------------------
 const SKIP_PATHS = [
   /^\/_next\//,       // Next.js static assets & internals
-  /^\/api\//,         // API routes (handle their own headers)
   /^\/__nextjs/,      // Next.js development helpers
 ];
 
@@ -70,8 +91,66 @@ const BLOCKED_PATHS = [
   '/web.config',
 ];
 
-export function proxy(request: NextRequest) {
+// ---------------------------------------------------------------------------
+// JWT Secret resolver (Edge-compatible)
+// ---------------------------------------------------------------------------
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: JWT_SECRET not set');
+    }
+    return new TextEncoder().encode('dev-only-insecure-key-do-not-use-in-production');
+  }
+  return new TextEncoder().encode(secret);
+}
+
+// ---------------------------------------------------------------------------
+// SECURITY HEADERS — applied to all responses
+// ---------------------------------------------------------------------------
+function applySecurityHeaders(response: NextResponse, isProduction: boolean): void {
+  response.headers.set(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: blob: https:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+    ].join('; '),
+  );
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(self)',
+  );
+
+  if (isProduction) {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains',
+    );
+  }
+
+  const startMs = Date.now();
+  response.headers.set('Server-Timing', `proxy;desc="Proxy Start";dur=${startMs}`);
+
+  if (!isProduction) {
+    response.headers.set('X-Powered-By', 'SmartTicketQR');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN PROXY FUNCTION
+// ---------------------------------------------------------------------------
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isProduction = process.env.NODE_ENV === 'production';
 
   // -----------------------------------------------------------------------
   // 1. Skip internal Next.js routes
@@ -90,76 +169,116 @@ export function proxy(request: NextRequest) {
   }
 
   // -----------------------------------------------------------------------
-  // 3. Build the response with security headers
+  // 3. Handle API routes — JWT verification + IDOR prevention
+  // -----------------------------------------------------------------------
+  if (pathname.startsWith('/api/')) {
+    // Block seed in production even at proxy level
+    if (pathname.startsWith('/api/auth/seed') && isProduction) {
+      const res = NextResponse.json(
+        { error: 'Seed endpoint is disabled in production' },
+        { status: 403 }
+      );
+      applySecurityHeaders(res, isProduction);
+      return res;
+    }
+
+    // CORS preflight
+    if (request.method === 'OPTIONS') {
+      const res = new NextResponse(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+      return res;
+    }
+
+    // Public API endpoints — pass through without JWT
+    if (isPublicApiPath(pathname)) {
+      return NextResponse.next();
+    }
+
+    // Protected API endpoints — verify JWT
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      const res = NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+      applySecurityHeaders(res, isProduction);
+      return res;
+    }
+
+    const token = authHeader.substring(7);
+
+    try {
+      const secret = getJwtSecret();
+      const { payload } = await jwtVerify(token, secret, {
+        algorithms: ['HS256'],
+      });
+
+      const userId = payload.userId as string | undefined;
+      const organizationId = payload.organizationId as string | undefined;
+      const role = payload.role as string | undefined;
+
+      if (!userId || !organizationId) {
+        const res = NextResponse.json(
+          { error: 'Token missing required claims' },
+          { status: 401 }
+        );
+        applySecurityHeaders(res, isProduction);
+        return res;
+      }
+
+      // ── IDOR PREVENTION: Strip client-supplied org headers ──
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.delete('x-organization-id');
+      requestHeaders.delete('x-org-id');
+
+      // ── INJECT server-verified headers from JWT ──
+      requestHeaders.set('x-verified-user-id', userId);
+      requestHeaders.set('x-verified-org-id', organizationId);
+      if (role) {
+        requestHeaders.set('x-verified-role', role);
+      }
+
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    } catch (err) {
+      console.warn(
+        `[Proxy] JWT verification failed for ${pathname}:`,
+        err instanceof Error ? err.message : err
+      );
+
+      const res = NextResponse.json(
+        { error: 'Invalid or expired token' },
+        { status: 401 }
+      );
+      applySecurityHeaders(res, isProduction);
+      return res;
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // 4. Page routes — security headers + i18n locale detection
   // -----------------------------------------------------------------------
   const response = NextResponse.next();
+  applySecurityHeaders(response, isProduction);
 
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  // --- Content-Security-Policy ---
-  response.headers.set(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https:",
-      "connect-src 'self'",
-      "frame-ancestors 'none'",
-    ].join('; '),
-  );
-
-  // --- X-Content-Type-Options ---
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-
-  // --- X-Frame-Options ---
-  response.headers.set('X-Frame-Options', 'DENY');
-
-  // --- X-XSS-Protection ---
-  response.headers.set('X-XSS-Protection', '1; mode=block');
-
-  // --- Referrer-Policy ---
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-  // --- Permissions-Policy ---
-  response.headers.set(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(self)',
-  );
-
-  // --- Strict-Transport-Security (production only) ---
-  if (isProduction) {
-    response.headers.set(
-      'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains',
-    );
-  }
-
-  // --- Server-Timing (performance monitoring) ---
-  const startMs = Date.now();
-  // We record the start time so downstream handlers (or a trailing
-  // instrumentation hook) can compute the elapsed duration.
-  response.headers.set('Server-Timing', `middleware;desc="Middleware Start";dur=${startMs}`);
-
-  // --- X-Powered-By (non-production only) ---
-  if (!isProduction) {
-    response.headers.set('X-Powered-By', 'SmartTicketQR');
-  }
-
-  // -----------------------------------------------------------------------
-  // 4. i18n locale detection (cookie → Accept-Language → default)
-  // -----------------------------------------------------------------------
+  // --- i18n locale detection (cookie → Accept-Language → default) ---
   const localeCookie = request.cookies.get('smartticket-lang')?.value;
   let detectedLocale: string;
 
   if (localeCookie && SUPPORTED_LOCALES.includes(localeCookie as typeof SUPPORTED_LOCALES[number])) {
-    // User already has a locale preference cookie
     detectedLocale = localeCookie;
   } else {
-    // First visit: detect from browser Accept-Language header
     detectedLocale = detectLocaleFromHeader(request.headers.get('Accept-Language'));
-    // Set the cookie for future requests (1 year, SameSite=Lax)
     response.cookies.set('smartticket-lang', detectedLocale, {
       path: '/',
       maxAge: 31536000,
@@ -167,7 +286,6 @@ export function proxy(request: NextRequest) {
     });
   }
 
-  // Expose detected locale via response header (client-side I18nProvider can read this)
   response.headers.set('X-Detected-Locale', detectedLocale);
 
   return response;
