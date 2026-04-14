@@ -69,11 +69,9 @@ function getDB() {
         // v1 → v2 migration: rename old stores if they exist
         if (oldVersion < 2) {
           // Delete old v1 store if it exists
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const names = Array.from(db.objectStoreNames) as any[];
+          const names = Array.from(db.objectStoreNames) as string[];
           if (names.includes('scan-queue')) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (db as any).deleteObjectStore('scan-queue');
+            (db as unknown as { deleteObjectStore: (name: string) => void }).deleteObjectStore('scan-queue');
           }
         }
 
@@ -138,7 +136,9 @@ export async function syncTicketsFromServer(
     throw new Error((err as { error?: string }).error || `Sync failed: ${res.status}`);
   }
 
-  const tickets = (await res.json()) as OfflineTicket[];
+  // API returns { count, syncedAt, tickets: OfflineTicket[] }
+  const data = (await res.json()) as { count: number; syncedAt: string; tickets: OfflineTicket[] };
+  const tickets = data.tickets;
   const now = Date.now();
 
   const tx = db.transaction('tickets', 'readwrite');

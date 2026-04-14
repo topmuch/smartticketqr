@@ -127,7 +127,7 @@ function applySecurityHeaders(response: NextResponse, isProduction: boolean): vo
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set(
     'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(self)',
+    'camera=(self), microphone=(), geolocation=(self)',
   );
 
   if (isProduction) {

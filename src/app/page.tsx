@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { useAppStore, type PageName } from '@/store/app-store';
 import { useLandingStore, type LandingPage } from '@/store/landing-store';
+import { canAccessPage } from '@/lib/permissions';
 import LoginPage from '@/components/smart-ticket/login-page';
 import AppShell from '@/components/smart-ticket/app-shell';
 import Dashboard from '@/components/smart-ticket/dashboard';
@@ -174,8 +175,13 @@ export default function Home() {
     );
   }
 
-  // Get the current page component
-  const PageComponent = pageComponents[currentPage] || Dashboard;
+  // Get the current page component — with RBAC guard
+  let PageComponent = pageComponents[currentPage] || Dashboard;
+
+  // ── Role-based access control: redirect unauthorized pages ──
+  if (user && !canAccessPage(user.role, currentPage)) {
+    PageComponent = Dashboard;
+  }
 
   return (
     <AppShell>
