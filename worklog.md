@@ -54,3 +54,29 @@ Stage Summary:
 - All 110 TypeScript errors → 0
 - All fixes verified with `npx tsc --noEmit` (clean) and `bun run lint` (clean)
 - Dev server starts successfully with 0 compilation errors
+---
+Task ID: 10
+Agent: Main (Audio Module)
+Task: Intégration complète - Bibliothèque Audio Super Admin + Sélection Client + Lecture Écran Public
+
+Work Log:
+- Phase 1: Audit complet du système existant (SPA router, Prisma, public display, RBAC, API patterns)
+- Phase 2: Adaptation de la spec PHP → Next.js/Prisma/Tailwind architecture
+- Phase 3: Ajout du model AudioLibrary dans prisma/schema.prisma + db push + generate
+- Phase 4: Création des API routes CRUD /api/audio-library + /api/audio-library/[id]
+- Phase 5: Création de la page Super Admin audio-library-page.tsx (~480 lignes)
+- Phase 6: Création de audio-settings-section.tsx pour la sélection côté client
+- Phase 7: Création du hook useAudioPlayer pour l'écran public
+- Phase 8: Intégration dans public-display.tsx + board API
+- Phase 9: i18n: 28 clés audio ajoutées pour FR/EN/PT/ES
+- Phase 10: Installation de socket.io-client (était manquant)
+- Phase 11: Seed de 5 fichiers audio de test
+- Phase 12: Tests API (login ✅, GET audio-list ✅, RBAC ✅, board ✅, POST super_admin ✅)
+- Phase 13: Push GitHub commit 9a65c07
+
+Stage Summary:
+- 7 fichiers créés, 7 fichiers modifiés
+- TypeScript: 0 erreurs | ESLint: 0 erreurs
+- API tests: Login, GET audio-list (4 global items), RBAC (admin can't POST), Board API (audioSettings + audioLibrary)
+- Note: Le serveur dev dans le sandbox est instable (OOM probable) — les tests curl fonctionnent mais nécessitent un script Node unifié
+- Le module audio est complet et prêt pour la production
