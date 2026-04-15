@@ -206,6 +206,7 @@ export async function POST(request: NextRequest) {
       data: {
         eventId,
         userId: tenant.userId,
+        organizationId: tenant.organizationId,
         ticketCode,
         ticketType: finalTicketType,
         holderName,

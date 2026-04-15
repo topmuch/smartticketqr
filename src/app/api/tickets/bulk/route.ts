@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
         ticketsToCreate.push({
           eventId,
           userId: tenant.userId,
+          organizationId: tenant.organizationId,
           ticketCode: generateTicketCode(),
           ticketType: 'Standard',
           holderName: `Attendee ${ticketNum}`,
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
         ticketsToCreate.push({
           eventId,
           userId: tenant.userId,
+          organizationId: tenant.organizationId,
           ticketCode: generateTicketCode(),
           ticketType: t.ticketType || 'Standard',
           holderName: t.holderName || 'Unknown',
